@@ -6,6 +6,8 @@ use crate::TreeBuildError;
 use crate::{NodeBounds, NodeId, SemanticNodeInput, SemanticTree, SemanticTreeBuilder, TreeBudget};
 use serde::{Deserialize, Serialize};
 
+const MAX_CAPTURE_CLASSES_PER_NODE: usize = 32;
+
 /// Flat accessibility node shape persisted by Screenpipe today.
 ///
 /// `depth` is relative to the platform walk. The adapter reconstructs the
@@ -121,13 +123,24 @@ pub fn adapt_captured_accessibility_tree(
             stats.depth_gap_nodes += 1;
         }
 
-        let classes: Vec<&str> = node
+        let mut class_buffer = [""; MAX_CAPTURE_CLASSES_PER_NODE];
+        let mut class_count = 0;
+        for class in node
             .class_name
             .as_deref()
             .into_iter()
             .flat_map(str::split_ascii_whitespace)
             .filter(|class| !class.is_empty())
-            .collect();
+        {
+            if class_count == MAX_CAPTURE_CLASSES_PER_NODE {
+                return Err(TreeBuildError::TooManyClassesOnNode {
+                    count: class_count + 1,
+                });
+            }
+            class_buffer[class_count] = class;
+            class_count += 1;
+        }
+        let classes = &class_buffer[..class_count];
         let description = node
             .help_text
             .as_deref()
@@ -142,7 +155,7 @@ pub fn adapt_captured_accessibility_tree(
                 value: node.value.as_deref().and_then(nonempty),
                 description,
                 identifier: node.automation_id.as_deref().and_then(nonempty),
-                classes: &classes,
+                classes,
                 flags: captured_node_flags(node),
                 bounds: node.bounds,
                 ..Default::default()
@@ -159,7 +172,7 @@ pub fn adapt_captured_accessibility_tree(
         stats.retained_nodes += 1;
         stats.identifier_nodes +=
             usize::from(node.automation_id.as_deref().is_some_and(is_nonempty));
-        stats.class_nodes += usize::from(!classes.is_empty());
+        stats.class_nodes += usize::from(class_count > 0);
         stats.subrole_nodes += usize::from(node.subrole.as_deref().is_some_and(is_nonempty));
         stats.value_nodes += usize::from(node.value.as_deref().is_some_and(is_nonempty));
     }

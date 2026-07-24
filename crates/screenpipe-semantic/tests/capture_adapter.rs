@@ -116,3 +116,18 @@ fn skips_empty_roles_but_preserves_budget_errors() {
     )
     .is_err());
 }
+
+#[test]
+fn bounds_per_node_class_scratch_space() {
+    let class_name = (0..33)
+        .map(|index| format!("class-{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let nodes = vec![CapturedAccessibilityNode {
+        role: "Group".into(),
+        class_name: Some(class_name),
+        ..Default::default()
+    }];
+
+    assert!(adapt_captured_accessibility_tree(&nodes, TreeBudget::default()).is_err());
+}

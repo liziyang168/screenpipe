@@ -11,6 +11,8 @@ use serde::Serialize;
 use std::io::Read;
 use std::time::Instant;
 
+const MAX_REPLAY_INPUT_BYTES: usize = 16 * 1024 * 1024;
+
 #[derive(Serialize)]
 struct ReplayMetrics {
     app: String,
@@ -37,7 +39,16 @@ struct ReplayMetrics {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (app, content_hash) = parse_args(std::env::args().skip(1).collect())?;
     let mut input = String::new();
-    std::io::stdin().read_to_string(&mut input)?;
+    std::io::stdin()
+        .take((MAX_REPLAY_INPUT_BYTES + 1) as u64)
+        .read_to_string(&mut input)?;
+    if input.len() > MAX_REPLAY_INPUT_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("replay input exceeds {MAX_REPLAY_INPUT_BYTES} bytes"),
+        )
+        .into());
+    }
     let nodes: Vec<CapturedAccessibilityNode> = serde_json::from_str(&input)?;
 
     let build_started = Instant::now();
