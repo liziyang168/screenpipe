@@ -96,9 +96,9 @@ of app definitions.
 
 ### Built-in catalog and reference family parsers
 
-The built-in catalog covers the 47 app targets found in Littlebird 0.82.4. This
-is an independent compatibility catalog of public app identities and URL
-patterns. It does not copy Littlebird parser implementations.
+The built-in catalog covers 47 app targets using public app identities, URL
+patterns, and stable accessibility contracts. Implementations remain
+Screenpipe-owned parser families and exact app overrides.
 
 | Family | Built-in profiles |
 |---|---|

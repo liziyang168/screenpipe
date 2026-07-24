@@ -8,7 +8,7 @@ Release-mode results across seven representative parser-family fixtures and
 one source-backed ChatGPT actor-turn fixture:
 
 The registry now contains 21 parser implementations covering all 47 cataloged
-Littlebird targets through shared families plus exact app overrides.
+targets through shared families plus exact app overrides.
 
 | format | retained facts | context tokens | complete prompt tokens | tokens per retained fact |
 |---|---:|---:|---:|---:|

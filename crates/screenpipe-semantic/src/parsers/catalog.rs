@@ -20,8 +20,8 @@ pub enum AppFamily {
 
 /// Public app identity and family membership for one built-in parser profile.
 ///
-/// The catalog independently describes the 47 targets observed in Littlebird
-/// 0.82.4. It contains no third-party parser implementation code.
+/// The catalog describes 47 supported app targets using public app identities,
+/// URL patterns, and stable accessibility contracts.
 #[derive(Debug, Clone, Copy)]
 pub struct BuiltinAppProfile {
     pub id: &'static str,

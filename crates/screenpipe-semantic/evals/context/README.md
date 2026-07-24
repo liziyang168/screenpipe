@@ -12,7 +12,7 @@ tokens and the complete fixed Pi input prompt, retained task facts, tokens per
 retained fact, parser selection, compact-tree heap, and a 1,000-iteration local
 adapt/parse/render benchmark for each case. Seven cases cover the shared parser
 families and one covers the source-backed ChatGPT app override; catalog tests
-separately keep all 47 Littlebird target profiles matched.
+separately keep all 47 supported target profiles matched.
 
 Run the deterministic report:
 
