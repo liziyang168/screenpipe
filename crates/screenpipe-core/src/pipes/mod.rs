@@ -2001,11 +2001,12 @@ fn should_try_fallback_preset(error_type: Option<&str>) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Manages all pipes: loading, scheduling, execution, logs.
-/// Callback fired after each scheduled pipe run completes.
-/// Args: (pipe_name, execution_id, success, duration_secs, error_type)
+/// Callback fired after each pipe run completes.
+/// Args: (pipe_name, execution_id, trigger_type, success, duration_secs, error_type)
 /// `error_type` is a sanitized category (e.g. "rate_limited", "auth_failed", "timeout", "crash")
 /// — never contains user data.
-pub type OnPipeRunComplete = Arc<dyn Fn(&str, Option<i64>, bool, f64, Option<&str>) + Send + Sync>;
+pub type OnPipeRunComplete =
+    Arc<dyn Fn(&str, Option<i64>, &str, bool, f64, Option<&str>) + Send + Sync>;
 
 /// Synchronous scheduler launch guard. Returning `Some(reason)` skips the run.
 pub type SchedulerRunGuard = Arc<dyn Fn() -> Option<String> + Send + Sync>;
@@ -2991,7 +2992,8 @@ impl PipeManager {
     /// in a spawned tokio task.  Use this from API handlers to avoid holding
     /// the PipeManager mutex for the entire execution duration.
     pub async fn start_pipe_background(&self, name: &str) -> Result<()> {
-        self.start_pipe_background_with_context(name, None).await
+        self.start_pipe_background_with_trigger_and_context(name, "manual", None)
+            .await
     }
 
     /// Start one manual run with request-scoped context. Unlike the manager's
@@ -3000,6 +3002,29 @@ impl PipeManager {
     pub async fn start_pipe_background_with_context(
         &self,
         name: &str,
+        run_context: Option<&str>,
+    ) -> Result<()> {
+        self.start_pipe_background_with_trigger_and_context(name, "manual", run_context)
+            .await
+    }
+
+    /// Start a pipe in the background with an explicit, low-cardinality trigger type.
+    pub async fn start_pipe_background_with_trigger(
+        &self,
+        name: &str,
+        trigger: &str,
+    ) -> Result<()> {
+        self.start_pipe_background_with_trigger_and_context(name, trigger, None)
+            .await
+    }
+
+    /// Start a Pipe with both low-cardinality telemetry and execution-scoped
+    /// prompt context. Keeping both values as arguments avoids mutating shared
+    /// manager state while a background run is being prepared.
+    pub async fn start_pipe_background_with_trigger_and_context(
+        &self,
+        name: &str,
+        trigger: &str,
         run_context: Option<&str>,
     ) -> Result<()> {
         let (config, body, _raw) = {
@@ -3124,7 +3149,7 @@ impl PipeManager {
         // Create DB execution row
         let exec_id = if let Some(ref store) = self.store {
             match store
-                .create_execution(name, "manual", &run_model, run_provider.as_deref())
+                .create_execution(name, trigger, &run_model, run_provider.as_deref())
                 .await
             {
                 Ok(id) => {
@@ -3216,6 +3241,7 @@ impl PipeManager {
         let logs_ref = self.logs.clone();
         let store_ref = self.store.clone();
         let on_complete = self.on_run_complete.clone();
+        let trigger_for_cb = trigger.to_string();
         let on_output = self.on_output_line.clone();
         let pipes_dir_for_log = self.pipes_dir.clone();
         let pipe_timeout = config.timeout.unwrap_or(DEFAULT_TIMEOUT_SECS);
@@ -3489,6 +3515,7 @@ impl PipeManager {
                 cb(
                     &name_for_cb,
                     exec_id,
+                    &trigger_for_cb,
                     success,
                     duration_secs,
                     cb_error_type.as_deref(),
@@ -4750,6 +4777,8 @@ impl PipeManager {
                 // high-frequency system events (ui_frame, window_ocr, etc.).
                 let mut event_triggered: std::collections::HashSet<String> =
                     std::collections::HashSet::new();
+                let mut connection_triggered: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
                 {
                     use futures::FutureExt;
 
@@ -4789,6 +4818,7 @@ impl PipeManager {
                                     info!("scheduler: connection trigger fired pipe '{}'", name);
                                     last_run.remove(name);
                                     event_triggered.insert(name.clone());
+                                    connection_triggered.insert(name.clone());
                                 }
                             }
                         }
@@ -4857,6 +4887,13 @@ impl PipeManager {
                     }
 
                     let triggered_by_event = event_triggered.contains(name);
+                    let trigger = if connection_triggered.contains(name) {
+                        "connection"
+                    } else if triggered_by_event {
+                        "event"
+                    } else {
+                        "scheduled"
+                    };
                     let last = last_run.get(name).copied().unwrap_or(DateTime::UNIX_EPOCH);
                     // Structured `schedule_config` is authoritative when set;
                     // otherwise fall back to the legacy `schedule` string.
@@ -4917,11 +4954,6 @@ impl PipeManager {
                             let missing = check(config.connections.clone()).await;
                             if !missing.is_empty() {
                                 let skipped_at = Utc::now();
-                                let trigger = if triggered_by_event {
-                                    "event"
-                                } else {
-                                    "scheduled"
-                                };
                                 let message = format!(
                                     "pipe '{}' skipped: missing required connections: {}",
                                     name,
@@ -4932,6 +4964,7 @@ impl PipeManager {
                                     name, missing
                                 );
                                 last_run.insert(name.clone(), skipped_at);
+                                let mut execution_id = None;
                                 if let Some(ref store) = store {
                                     match store
                                         .create_execution(
@@ -4943,6 +4976,7 @@ impl PipeManager {
                                         .await
                                     {
                                         Ok(id) => {
+                                            execution_id = Some(id);
                                             let _ = store
                                                 .finish_execution(
                                                     id,
@@ -4980,7 +5014,14 @@ impl PipeManager {
                                     }
                                 }
                                 if let Some(ref cb) = on_run_complete {
-                                    cb(name, None, false, 0.0, Some("missing_connections"));
+                                    cb(
+                                        name,
+                                        execution_id,
+                                        trigger,
+                                        false,
+                                        0.0,
+                                        Some("missing_connections"),
+                                    );
                                 }
                                 continue;
                             }
@@ -5079,20 +5120,18 @@ impl PipeManager {
                                 );
                                 warn!("scheduler: pipe '{}': {}", name, message);
                                 let failed_at = Utc::now();
+                                let mut execution_id = None;
                                 if let Some(ref store) = store {
                                     if let Ok(id) = store
                                         .create_execution(
                                             name,
-                                            if triggered_by_event {
-                                                "event"
-                                            } else {
-                                                "scheduled"
-                                            },
+                                            trigger,
                                             &config.model,
                                             config.provider.as_deref(),
                                         )
                                         .await
                                     {
+                                        execution_id = Some(id);
                                         let _ = store
                                             .finish_execution(
                                                 id,
@@ -5130,7 +5169,14 @@ impl PipeManager {
                                     qr.remove(name);
                                 }
                                 if let Some(ref cb) = on_run_complete {
-                                    cb(name, None, false, 0.0, Some("ai_preset_unavailable"));
+                                    cb(
+                                        name,
+                                        execution_id,
+                                        trigger,
+                                        false,
+                                        0.0,
+                                        Some("ai_preset_unavailable"),
+                                    );
                                 }
                                 continue;
                             }
@@ -5220,6 +5266,7 @@ impl PipeManager {
                     );
                     let pipe_name = name.clone();
                     let is_event_triggered = triggered_by_event;
+                    let trigger = trigger.to_string();
                     let logs_ref = logs.clone();
                     let running_ref = running.clone();
                     let running_exec_ids_ref = running_execution_ids.clone();
@@ -5279,14 +5326,9 @@ impl PipeManager {
                         info!("scheduler: running pipe '{}'", pipe_name);
 
                         // Create DB execution row
-                        let trigger = if is_event_triggered {
-                            "event"
-                        } else {
-                            "scheduled"
-                        };
                         let exec_id = if let Some(ref store) = store_ref {
                             match store
-                                .create_execution(&pipe_name, trigger, &model, provider.as_deref())
+                                .create_execution(&pipe_name, &trigger, &model, provider.as_deref())
                                 .await
                             {
                                 Ok(id) => {
@@ -5610,6 +5652,7 @@ impl PipeManager {
                             cb(
                                 &name_for_cb,
                                 exec_id,
+                                &trigger,
                                 success,
                                 duration_secs,
                                 cb_error_type.as_deref(),

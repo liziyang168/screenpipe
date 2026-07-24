@@ -2575,6 +2575,11 @@ pub(crate) async fn show_shortcut_reminder_impl(
             }
             let native_payload = serde_json::Value::Object(map).to_string();
             if native_shortcut_reminder::show(Some(&native_payload)) {
+                native_actions::track_native_overlay_event(
+                    &app_handle,
+                    "shortcut_reminder_shown",
+                    serde_json::json!({}),
+                );
                 // A recording incident may already be active (e.g. this show IS
                 // the incident reveal) — sync the panel's health state. Same
                 // for the bell's unread dot, which is otherwise only pushed on
@@ -3611,6 +3616,17 @@ pub async fn copy_deeplink_to_clipboard(frame_id: i64) -> Result<(), String> {
         .set_text(link)
         .map_err(|e| format!("failed to set clipboard: {}", e))?;
     Ok(())
+}
+
+/// Read text from the system clipboard (native API — navigator.clipboard.readText()
+/// is not permitted in the Tauri webview). Returns empty string when the
+/// clipboard has no text. Used by the IMAP card to auto-detect a copied
+/// Gmail app password.
+#[tauri::command]
+#[specta::specta]
+pub async fn read_clipboard_text() -> Result<String, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("clipboard error: {}", e))?;
+    Ok(clipboard.get_text().unwrap_or_default())
 }
 
 /// Copy arbitrary text to the system clipboard (native API, works in Tauri webview).
