@@ -10,8 +10,8 @@ fn semantic_context_is_smaller_than_raw_without_losing_task_facts() {
     let report = context_eval::evaluate_suite().expect("context eval must run");
 
     assert_eq!(report.catalog_profiles, 47);
-    assert_eq!(report.parser_families, 7);
-    assert_eq!(report.representative_cases, 7);
+    assert_eq!(report.parser_implementations, 8);
+    assert_eq!(report.representative_cases, 8);
     assert_eq!(
         report.totals.semantic.retained_facts, report.totals.semantic.total_facts,
         "semantic context must preserve every fixed-suite fact"
@@ -64,7 +64,7 @@ fn semantic_context_is_smaller_than_raw_without_losing_task_facts() {
 #[test]
 fn prompt_pack_is_balanced_for_pi_ab_evaluation() {
     let prompts = context_eval::prompt_records().expect("prompt pack must render");
-    assert_eq!(prompts.len(), 21);
+    assert_eq!(prompts.len(), 24);
     assert!(context_eval::answer_matches(
         "Alice says it is blocked.",
         "Alice"
@@ -75,6 +75,7 @@ fn prompt_pack_is_balanced_for_pi_ab_evaluation() {
     ));
     for case in [
         "slack_conversation",
+        "chatgpt_actor_turns",
         "gmail_thread",
         "notion_document",
         "todoist_tasks",

@@ -93,7 +93,7 @@ fn catalog_exactly_matches_all_47_targets() {
 #[test]
 fn every_profile_has_identity_family_and_bounded_registry_coverage() {
     let registry = builtin_parser_registry().expect("built-in manifests must compile");
-    assert_eq!(registry.len(), 7);
+    assert_eq!(registry.len(), 8);
     for profile in builtin_app_profiles() {
         assert!(!profile.families.is_empty(), "{} has no family", profile.id);
         let unique_families: HashSet<_> = profile.families.iter().copied().collect();
@@ -114,10 +114,14 @@ fn every_profile_has_identity_family_and_bounded_registry_coverage() {
             .capture_plan(&identity_for(profile))
             .unwrap_or_else(|| panic!("{} is not covered by a parser", profile.id));
         assert!(!plan.parser_ids.is_empty());
+        let override_count = usize::from(matches!(
+            profile.id,
+            "chatgpt" | "chatgptlegacy" | "chatgptweb"
+        ));
         assert_eq!(
             plan.parser_ids.len(),
-            profile.families.len(),
-            "{} matched an unexpected parser family",
+            profile.families.len() + override_count,
+            "{} matched unexpected parser candidates",
             profile.id
         );
         assert!(plan.parser_ids.len() <= 4);

@@ -1,6 +1,6 @@
 # Semantic context evaluation
 
-This fixed suite compares three representations of the same seven synthetic,
+This fixed suite compares three representations of the same eight synthetic,
 privacy-safe accessibility trees:
 
 - persisted accessibility JSON;
@@ -10,9 +10,9 @@ privacy-safe accessibility trees:
 The report uses the exact `o200k_base` tokenizer. It scores both context-only
 tokens and the complete fixed Pi input prompt, retained task facts, tokens per
 retained fact, parser selection, compact-tree heap, and a 1,000-iteration local
-adapt/parse/render benchmark for each case. The seven cases cover the seven
-shared parser families; catalog tests separately keep all 47 Littlebird target
-profiles matched.
+adapt/parse/render benchmark for each case. Seven cases cover the shared parser
+families and one covers the source-backed ChatGPT app override; catalog tests
+separately keep all 47 Littlebird target profiles matched.
 
 Run the deterministic report:
 
@@ -20,7 +20,35 @@ Run the deterministic report:
 cargo run -p screenpipe-semantic --example context_eval --locked -- --report
 ```
 
-Generate a balanced 21-row JSONL prompt pack for a Pi or other model A/B run:
+Run a privacy-safe replay over time-distributed samples from the local
+Screenpipe database:
+
+```bash
+scripts/eval-semantic-replay.sh \
+  --days 30 \
+  --samples-per-app 25 \
+  --max-apps 25 \
+  --output /tmp/screenpipe-semantic-replay-report.json
+```
+
+To iterate on one app parser, add an exact captured app name, for example
+`--app-name ChatGPT --samples-per-app 100`.
+
+The script first selects frame IDs and structural sizes, then retrieves only
+those exact trees into a mode-0600 temporary file. The private tree export is
+deleted before the aggregate report is generated. Reports contain only app
+names, counts, parser IDs, sizes, exact token counts, timing, and bounded-tree
+heap estimates. They never contain captured text, values, URLs, or semantic
+output.
+
+Real replay measures applicability, abstention, context reduction, latency,
+and memory across the user's actual tree shapes. It does not establish parser
+correctness because historical captures have no human-labelled semantic gold.
+Use the fixed fixtures or a separately reviewed sanitized capture pack for
+fidelity gates. A model comparison over parser-generated labels would measure
+answerability, not correctness, and must not be reported as an accuracy score.
+
+Generate a balanced 24-row JSONL prompt pack for a Pi or other model A/B run:
 
 ```bash
 cargo run -p screenpipe-semantic --example context_eval --locked -- --prompts \
@@ -32,7 +60,7 @@ Each case has identical question and expected answer across `raw_json`,
 from deterministic fact retention. A model run is intentionally opt-in so CI
 never requires credentials, network access, or paid inference.
 
-Run the complete 21-prompt A/B through a local Pi model:
+Run the complete 24-prompt A/B through a local Pi model:
 
 ```bash
 cargo run --release -p screenpipe-semantic --example context_eval --locked -- \

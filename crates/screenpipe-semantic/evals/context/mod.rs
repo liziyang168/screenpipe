@@ -92,7 +92,7 @@ pub struct EvalTotals {
 pub struct EvalReport {
     pub tokenizer: &'static str,
     pub catalog_profiles: usize,
-    pub parser_families: usize,
+    pub parser_implementations: usize,
     pub representative_cases: usize,
     pub cases: Vec<CaseReport>,
     pub totals: EvalTotals,
@@ -117,7 +117,7 @@ struct EvaluatedCase {
 pub fn evaluate_suite() -> Result<EvalReport, Box<dyn Error>> {
     let cases: Vec<EvalCase> = serde_json::from_str(CASES)?;
     let registry = builtin_parser_registry()?;
-    let parser_families = registry.len();
+    let parser_implementations = registry.len();
     let mut reports = Vec::with_capacity(cases.len());
     for case in cases {
         reports.push(evaluate_case(&registry, case)?.report);
@@ -126,7 +126,7 @@ pub fn evaluate_suite() -> Result<EvalReport, Box<dyn Error>> {
     Ok(EvalReport {
         tokenizer: "o200k_base",
         catalog_profiles: builtin_app_profiles().len(),
-        parser_families,
+        parser_implementations,
         representative_cases: reports.len(),
         cases: reports,
         totals,

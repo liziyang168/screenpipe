@@ -29,6 +29,37 @@
     ]
   },
   {
+    "id": "chatgpt_actor_turns",
+    "question": "What eval should be used for parser coverage?",
+    "expected_answer": "bounded replay eval",
+    "facts": [
+      "Parser evaluation",
+      "Measure parser coverage",
+      "Use a bounded replay eval"
+    ],
+    "app": {
+      "platform": "macos",
+      "app_id": "com.openai.chat",
+      "executable": "ChatGPT",
+      "display_name": "ChatGPT",
+      "version": null,
+      "browser_url": null
+    },
+    "nodes": [
+      { "role": "AXWindow", "text": "Parser evaluation", "depth": 0 },
+      { "role": "AXGroup", "text": "", "depth": 1 },
+      { "role": "AXHeading", "text": "You said:", "depth": 2 },
+      { "role": "AXStaticText", "text": "You said:", "depth": 3 },
+      { "role": "AXButton", "text": "Edit message", "depth": 2 },
+      { "role": "AXStaticText", "text": "Edit message", "depth": 3 },
+      { "role": "AXStaticText", "text": "Measure parser coverage", "depth": 2 },
+      { "role": "AXHeading", "text": "ChatGPT said:", "depth": 2 },
+      { "role": "AXStaticText", "text": "ChatGPT said:", "depth": 3 },
+      { "role": "AXStaticText", "text": "Use a bounded replay eval", "depth": 2 },
+      { "role": "AXButton", "text": "Copy response", "depth": 2 }
+    ]
+  },
+  {
     "id": "gmail_thread",
     "question": "What action does Alice request?",
     "expected_answer": "retry signing",
