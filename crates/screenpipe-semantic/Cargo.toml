@@ -1,0 +1,12 @@
+[package]
+name = "screenpipe-semantic"
+version = "0.1.0"
+edition = { workspace = true }
+description = "Deterministic app-semantic parser contracts for screenpipe"
+license-file = { workspace = true }
+
+[dependencies]
+regex = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
