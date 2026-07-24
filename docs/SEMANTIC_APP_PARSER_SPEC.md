@@ -73,6 +73,7 @@ Prefer shared family implementations with small declarative profiles:
 | Task | title, project, status, due date, assignee | board/list anchors and field labels |
 | Calendar | event, time range, attendees, location | day/week view structure and event container |
 | Page/document | title, author, body, selection | article/editor root and navigation exclusions |
+| Terminal | command and output transcript | terminal root and prompt markers |
 
 A family parser manifest can match multiple bundle identifiers, executables,
 and URL patterns. Native and web versions may still need separate adapters when
@@ -89,21 +90,39 @@ normal case is one family parser, or one app override plus one family parser.
 This bounds failure-path CPU even if the registry eventually contains hundreds
 of app definitions.
 
-### Reference family parser
+### Built-in catalog and reference family parsers
 
-`EditorFamilyParser` proves the model with one implementation and three data-only
-profiles: VS Code, Cursor, and Windsurf. It recognizes macOS AX, Windows UIA,
-and Linux AT-SPI role aliases, then emits only editor buffers and integrated
-terminal content as `Document` items. Workbench navigation, status text, and
-other chrome are excluded from the projection.
+The built-in catalog covers the 47 app targets found in Littlebird 0.82.4. This
+is an independent compatibility catalog of public app identities and URL
+patterns. It does not copy Littlebird parser implementations.
 
-The parser abstains on unrecognized surfaces such as Settings and on editor
-buffers that report accessibility is unavailable. This preserves generic
-accessibility instead of emitting an empty or misleading semantic result.
+| Family | Built-in profiles |
+|---|---|
+| Conversation | Antigravity, Antigravity IDE, ChatGPT, ChatGPT legacy, ChatGPT web, Claude, Claude macOS, ClickUp, ClickUp web, Cursor, Discord, Gemini desktop, Gemini web, Messages, Messenger, Microsoft Teams, Slack, WhatsApp, WhatsApp web, Windsurf |
+| Mail | Gmail, Mail, Microsoft Outlook, Spark Desktop, Spark Mail Classic, Superhuman |
+| Editor | Antigravity IDE, Cursor, VS Code, Windsurf, Xcode |
+| Document | Antigravity IDE, Claude macOS, ClickUp, ClickUp web, Microsoft Outlook, Microsoft Word, Microsoft Word web, Notes, Notion, Obsidian, Pages, TextEdit, Xcode |
+| Task | Antigravity, Asana, Asana web, ClickUp, ClickUp web, Microsoft To Do, OmniFocus, Todoist, Toggl |
+| Calendar | Calendar, Fantastical |
+| Terminal | Ghostty, iTerm2, Terminal, Warp |
 
-Synthetic, privacy-safe fixtures cover all three platforms and apps. They are
-contract fixtures, not proof that current platform walkers retain every required
-structural node. Capture integration remains a separate measured milestone.
+Profiles may belong to more than one family because the same app can expose
+different semantic surfaces. The registry still runs at most four matching
+candidates for one tree.
+
+`EditorFamilyParser` recognizes macOS AX, Windows UIA, and Linux AT-SPI role
+aliases, then emits editor buffers and integrated terminal content as `Document`
+items. `FamilyParser` supplies conservative conversation, mail, document, task,
+calendar, and terminal implementations. Each implementation requires structural
+markers before it emits output. App identity by itself always returns
+`NotHandled`.
+
+The parsers abstain on unrecognized surfaces and inaccessible editor buffers.
+This preserves generic accessibility instead of emitting an empty or misleading
+semantic result. Synthetic, privacy-safe fixtures cover every family, and the
+editor fixtures cover all three platforms. They are contract fixtures, not proof
+that current platform walkers retain every required structural node. Capture
+integration remains a separate measured milestone.
 
 ## 4. Capture integration
 
@@ -227,9 +246,10 @@ compression alone is not a sufficient metric.
 
 ## 11. Rollout
 
-1. Replay the editor-family fixtures against real compact structural capture.
+1. Replay every family fixture against real compact structural capture.
 2. Add nonblocking worker, schema, retention, and redaction integration.
-3. Add conversation and mail family parsers with app profiles and fixtures.
-4. Add semantic search and MCP output behind a feature flag.
-5. Expand shared parser families with thin declarative app profiles.
+3. Add semantic search and MCP output behind a feature flag.
+4. Measure token reduction and parser resource use on representative traces.
+5. Tighten profiles only from privacy-safe real-tree fixtures when a shared
+   parser abstains or emits the wrong structure.
 6. Consider signed remote parser packs only after shipped parsers are stable.
