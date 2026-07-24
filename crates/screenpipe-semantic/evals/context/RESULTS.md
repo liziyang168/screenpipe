@@ -40,14 +40,29 @@ retain the structural containers requested by each parser family.
 
 ## Storage boundary
 
-These results measure model context, not database size. This PR adds no semantic
-tables or writes, so it does not reduce or increase captured on-disk data.
-Persistence-neutral storage-key tests prove that identical parse inputs can
-reuse one run, stable and derived values can reuse immutable versions, changed
-values create new versions, and ephemeral messages never merge across runs.
-In the fixed cardinality regression, 100 identical frames produced one unique
-parse-run key and one copy of each of two item values. Across 100 distinct input
-hashes, the unchanged derived task reused one value while the ephemeral message
-produced 100 run-scoped values.
-Actual storage reduction requires the later normalized schema, retention
-integration, and a page-level SQLite comparison on the same fixed trace.
+The normalized schema stores runs, canonical item versions, run-local
+observations, and a nullable frame link. It never stores another tree JSON blob.
+The SQLite page-growth regression first inserts 1,000 ordinary frame rows, then
+measures only the active database pages added by semantic persistence:
+
+| synthetic trace | semantic growth | bytes per frame |
+|---|---:|---:|
+| 1,000 identical projections | 8,192 bytes | 8.2 |
+| 1,000 changing projections | 802,816 bytes | 802.8 |
+
+Identical frames share one run and one copy of each item. The changing trace
+keeps one stable conversation item but creates a run-scoped message version for
+every observation. The test also covers FTS indexes and the larger frame rows
+caused by the non-null run link.
+
+At one frame every 30 seconds, those synthetic endpoints extrapolate to about
+24 KB/day and 8.6 MB/year for identical content, or 2.3 MB/day and 0.84 GB/year
+if every frame changes. At one changing frame every 10 seconds, the semantic
+layer would be about 6.9 MB/day and 2.53 GB/year. These are page-level synthetic
+projections, not a measured user workload, and exclude screenshots, audio,
+existing text, tree JSON, and elements.
+
+This PR still does not reduce total storage because capture keeps all existing
+raw data. Reduction requires the later measured `lean` policy to clear heavy raw
+tree and geometry only after a durable successful parse. A representative
+real-capture trace remains necessary before choosing retention defaults.

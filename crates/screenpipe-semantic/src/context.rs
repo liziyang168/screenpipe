@@ -15,12 +15,27 @@ pub fn render_semantic_context(
     frame_id: i64,
     projection: &ValidatedProjection,
 ) -> String {
-    let items = projection.items();
+    render_semantic_items_context(app, frame_id, projection.items())
+}
+
+/// Render semantic items that were validated before persistence and loaded
+/// back from normalized storage.
+pub fn render_semantic_items_context(
+    app: &AppIdentity,
+    frame_id: i64,
+    items: &[SemanticItem],
+) -> String {
     let by_id: HashMap<&str, &SemanticItem> = items
         .iter()
         .map(|item| (item.local_id.as_str(), item))
         .collect();
-    let mut output = String::with_capacity(projection.text_bytes().saturating_add(64));
+    let mut output = String::with_capacity(
+        items
+            .iter()
+            .map(semantic_item_text_capacity)
+            .sum::<usize>()
+            .saturating_add(64),
+    );
     let _ = writeln!(
         output,
         "{} | frame={frame_id}",
@@ -76,6 +91,16 @@ pub fn render_semantic_context(
         }
     }
     output
+}
+
+fn semantic_item_text_capacity(item: &SemanticItem) -> usize {
+    item.local_id.len()
+        + item.title.as_deref().map_or(0, str::len)
+        + item.body.as_deref().map_or(0, str::len)
+        + item.actor.as_deref().map_or(0, str::len)
+        + item.occurred_at.as_deref().map_or(0, str::len)
+        + item.status.as_deref().map_or(0, str::len)
+        + 32
 }
 
 fn item_depth(item: &SemanticItem, by_id: &HashMap<&str, &SemanticItem>) -> usize {

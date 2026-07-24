@@ -21,7 +21,7 @@ pub use capture::{
     adapt_captured_accessibility_tree, AdaptedSemanticTree, CaptureAdapterStats,
     CapturedAccessibilityNode, CapturedNodeFlags,
 };
-pub use context::render_semantic_context;
+pub use context::{render_semantic_context, render_semantic_items_context};
 pub use model::{
     AccessibilityAttribute, AppIdentity, AppVersionRequirement, AttributeSet, IdentityQuality,
     OffscreenPolicy, ParseContext, ParseOutcome, ParserManifest, ParserScope, Platform,

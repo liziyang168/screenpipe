@@ -1,7 +1,7 @@
 # Semantic App Parser
 
-> **Status**: Draft foundation, not enabled in capture
-> **Date**: 2026-07-23
+> **Status**: Parser and normalized persistence foundation, not enabled in capture
+> **Date**: 2026-07-24
 
 ## 1. Problem
 
@@ -39,7 +39,7 @@ the chain because it means the parser recognized a genuinely empty screen.
 
 ## 3. Foundation in this change
 
-`screenpipe-semantic` adds no runtime integration. It defines:
+`screenpipe-semantic` defines:
 
 - stable cross-platform `AppIdentity`
 - parser manifests and precompiled app/URL selection
@@ -53,8 +53,11 @@ the chain because it means the parser recognized a genuinely empty screen.
 - stable input fingerprints that include parser/schema/app/content versions
 - output validation for size, item count, parents, cycles, and source-node links
 
-Keeping this inactive makes the first review about contracts and resource bounds.
-Capture, database, scripting, and retrieval integrations can land independently.
+The database integration adds normalized semantic runs and canonical items,
+frame linkage, full-text search, compact retrieval, and retention garbage
+collection. Capture does not enqueue parser work yet. This keeps database and
+retrieval review independent from the structural-capture and resource-budget
+work required before automatic writes are safe.
 
 ## 3.1 Parser coverage model
 
@@ -211,10 +214,10 @@ The parser ABI and stored output must remain independent of the chosen runtime.
 
 ## 7. Storage
 
-This change does not add a migration, database table, background writer, or
-semantic write path. Parsed output exists only in memory in tests, replay, and
-evaluation. Current `frames`, `elements`, FTS, screenshot, and retention behavior
-is unchanged, so this PR reduces prompt tokens but does not reduce disk use.
+The normalized migration and transactional write/read adapter are implemented,
+but capture does not call the writer yet. Parsed output is persisted only by an
+explicit caller or test. Current screenshot, accessibility, element, and raw-text
+writes are unchanged, so this PR does not reduce disk use by itself.
 
 Today a stored accessibility frame can contain `accessibility_text`, a derived
 `full_text`, `accessibility_tree_json`, and normalized `elements`. Exact content
@@ -225,18 +228,19 @@ and tree JSON. Semantic persistence must not add another per-frame JSON copy.
 Do not store one parsed JSON blob per frame. Repeated screens would repeat every
 message or document. The normalized persistence contract is:
 
-- `semantic_parse_runs`: parser/version/input fingerprint/status/duration
-- `semantic_frame_refs`: frame to parse run, reusing identical projections
+- `semantic_runs`: parser/version/input fingerprint/status/duration
+- `frames.semantic_run_id`: nullable frame to run link, reusing identical runs
 - `semantic_items`: immutable, canonical, versioned typed records
-- `semantic_observations`: run membership, parent, order, and source node indexes
-- external-content semantic FTS
+- `semantic_run_items`: run membership, parent, order, and source node indexes
+- external-content `semantic_items_fts`
 
 Required keys and constraints:
 
-- `semantic_parse_runs.input_fingerprint` is unique. It includes parser ID,
+- `semantic_runs.input_fingerprint` is unique. It includes parser ID,
   parser version, schema version, app identity, and source content hash.
-- `semantic_frame_refs.frame_id` is unique, so one frame resolves to at most one
-  selected semantic projection.
+- `frames.semantic_run_id` is nullable, so one frame resolves to at most one
+  selected semantic projection while any number of identical frames may reuse a
+  run.
 - Every item has an `entity_fingerprint` and a `version_fingerprint`.
   `semantic_items.version_fingerprint` is unique and immutable.
 - Stable and derived items may reuse the same exact canonical version across
@@ -247,14 +251,18 @@ Required keys and constraints:
   derived entity key is an approximate grouping hint even when exact-value
   reuse is safe.
 - Parent, order, parser-local ID, and source-node indexes live only in
-  `semantic_observations`. Moving an item within a screen must not duplicate its
+  `semantic_run_items`. Moving an item within a screen must not duplicate its
   canonical value.
 - A changed title, body, actor, time, status, or metadata value creates a new
   immutable item version while preserving the entity fingerprint.
 
-`semantic_item_storage_keys` implements this contract without I/O. It also
-domain-separates entity and version hashes and scopes them by parser and app.
-The storage adapter must bind the 32-byte values as BLOBs, not hex text.
+`semantic_projection_storage_keys` implements this contract. It domain-separates
+run, entity, and version hashes and scopes them by parser and app. The storage
+adapter binds 32-byte values as BLOBs, not hex text, and writes the run, canonical
+items, run-local membership, and frame link in one immediate transaction.
+Callers must use `SemanticTree::structural_fingerprint()` as the input content
+hash. The existing capture hash covers flattened text only and is not safe for
+semantic run reuse when hierarchy changes.
 
 Do not overload `frames.full_text`, `memories`, or `outputs`. They represent raw
 search text, durable user facts, and generated files respectively.
@@ -274,14 +282,23 @@ Keep both forms only while they serve distinct purposes:
   path. Never delete the only usable representation.
 
 Storage reduction is therefore a later retention outcome, not an automatic
-consequence of parsing. The schema PR must report SQLite page-level bytes for the
-same fixed trace in current full, current lean, semantic full, and semantic lean
-modes after checkpoint and compaction. It must separately report media bytes,
-database bytes, reused parse runs, reused item versions, and parse failures.
+consequence of parsing. The initial synthetic SQLite regression measured 8.2
+semantic bytes/frame for 1,000 identical projections and 802.8 bytes/frame for
+1,000 changing projections, including indexes and frame links. Before changing
+retention defaults, a representative fixed capture trace must still compare
+current full, current lean, semantic full, and semantic lean modes after
+checkpoint and compaction. It must separately report media bytes, database
+bytes, reused parse runs, reused item versions, and parse failures.
 
 ## 8. Retrieval
 
-Add one semantic endpoint and one MCP tool rather than app-specific tools.
+The database API supports exact-frame and bounded time/app/full-text queries.
+`GET /semantic/context` exposes grouped compact text by default and typed JSON
+with parser provenance when `format=json` is passed.
+
+Add one MCP tool rather than app-specific tools only when the bounded capture
+worker is enabled. Registering an always-empty tool before automatic writes
+would increase every agent's tool-schema tokens without providing context.
 
 Default output is grouped plain text:
 
@@ -292,8 +309,8 @@ alice 10:02: notarization is blocking the release
 source frame: 481992
 ```
 
-The agent progression becomes activity summary, semantic app context, generic
-content search, element search, and pixels only when needed.
+After activation, the agent progression becomes activity summary, semantic app
+context, generic content search, element search, and pixels only when needed.
 
 ## 9. Privacy and retention
 
@@ -350,9 +367,9 @@ relationships.
 1. Retain parser-requested structural containers in the existing platform walk
    and replay every family against privacy-safe real-tree fixtures.
 2. Add the nonblocking shadow worker with metrics only and no database writes.
-3. Add schema, retention, and redaction integration after shadow resource gates
-   pass.
-4. Add semantic search and MCP output behind a feature flag.
+3. Measure the structural fingerprint, then enable normalized writes behind a
+   feature flag with retention and redaction gates.
+4. Register one MCP semantic-context tool only after the writer is enabled.
 5. Measure token reduction and parser resource use on representative traces.
 6. Tighten profiles only from privacy-safe real-tree fixtures when a shared
    parser abstains or emits the wrong structure.

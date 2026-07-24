@@ -42,7 +42,15 @@ cargo run --release -p screenpipe-semantic --example context_eval --locked -- \
 The runner disables tools, extensions, skills, project context, sessions, and
 startup network checks. Only the privacy-safe synthetic suite enters the model.
 
-This suite measures AI input efficiency, not SQLite storage reduction. The
-current PR performs no semantic database writes. Storage-key unit tests cover
-exact parse-run reuse, immutable item versions, and run-scoped ephemeral items;
-an on-disk comparison belongs to the later schema and retention integration.
+This suite measures AI input efficiency. The database integration separately
+tests transactional normalized writes, exact parse-run reuse, immutable item
+versions, run-scoped ephemeral items, FTS retrieval, retention cleanup, and
+SQLite page growth:
+
+```bash
+cargo test -p screenpipe-db --test semantic_storage_test -- --nocapture
+```
+
+The storage regression measures incremental semantic pages for repeated and
+changing synthetic traces. It does not claim total disk reduction because the
+capture path still retains existing raw text, tree JSON, elements, and media.

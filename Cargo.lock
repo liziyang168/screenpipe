@@ -8353,6 +8353,7 @@ dependencies = [
  "screenpipe-config",
  "screenpipe-core",
  "screenpipe-secrets",
+ "screenpipe-semantic",
  "screenpipe-sqlite-coordinator",
  "serde",
  "serde_json",
