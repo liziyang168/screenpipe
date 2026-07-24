@@ -9,7 +9,7 @@ use screenpipe_semantic::{
     ParserManifest, ParserScope, Platform, SemanticItem, SemanticKind, SemanticNodeInput,
     SemanticTreeBuilder, TreeBudget, ValidatedProjection,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 async fn database() -> DatabaseManager {
     DatabaseManager::new("sqlite::memory:", Default::default())
@@ -129,7 +129,12 @@ async fn active_database_bytes(db: &DatabaseManager) -> u64 {
     u64::try_from((page_count - free_pages) * page_size).expect("nonnegative database size")
 }
 
-async fn measured_semantic_bytes(frame_count: usize, changing: bool) -> u64 {
+struct StorageMeasurement {
+    bytes: u64,
+    write_duration: Duration,
+}
+
+async fn measured_semantic_bytes(frame_count: usize, changing: bool) -> StorageMeasurement {
     let db = database().await;
     let now = Utc::now();
     let mut frames = Vec::with_capacity(frame_count);
@@ -138,6 +143,7 @@ async fn measured_semantic_bytes(frame_count: usize, changing: bool) -> u64 {
     }
     let baseline_bytes = active_database_bytes(&db).await;
 
+    let write_started = Instant::now();
     for (index, frame_id) in frames.into_iter().enumerate() {
         let body = if changing {
             format!("signing state changed at observation {index}")
@@ -156,7 +162,10 @@ async fn measured_semantic_bytes(frame_count: usize, changing: bool) -> u64 {
         .expect("store measured semantic projection");
     }
 
-    active_database_bytes(&db).await - baseline_bytes
+    StorageMeasurement {
+        bytes: active_database_bytes(&db).await - baseline_bytes,
+        write_duration: write_started.elapsed(),
+    }
 }
 
 #[tokio::test]
@@ -331,16 +340,19 @@ async fn replacing_a_frame_projection_collects_the_superseded_run() {
 #[tokio::test]
 async fn normalized_storage_growth_tracks_unique_semantics_not_raw_frame_count() {
     const FRAME_COUNT: usize = 1_000;
-    let repeated_bytes = measured_semantic_bytes(FRAME_COUNT, false).await;
-    let changing_bytes = measured_semantic_bytes(FRAME_COUNT, true).await;
-    let repeated_per_frame = repeated_bytes as f64 / FRAME_COUNT as f64;
-    let changing_per_frame = changing_bytes as f64 / FRAME_COUNT as f64;
+    let repeated = measured_semantic_bytes(FRAME_COUNT, false).await;
+    let changing = measured_semantic_bytes(FRAME_COUNT, true).await;
+    let repeated_per_frame = repeated.bytes as f64 / FRAME_COUNT as f64;
+    let changing_per_frame = changing.bytes as f64 / FRAME_COUNT as f64;
+    let repeated_micros = repeated.write_duration.as_micros() as f64 / FRAME_COUNT as f64;
+    let changing_micros = changing.write_duration.as_micros() as f64 / FRAME_COUNT as f64;
 
     println!(
-        "semantic SQLite growth: repeated={repeated_bytes} bytes ({repeated_per_frame:.1}/frame), changing={changing_bytes} bytes ({changing_per_frame:.1}/frame)"
+        "semantic SQLite growth: repeated={} bytes ({repeated_per_frame:.1}/frame, {repeated_micros:.1} us/write), changing={} bytes ({changing_per_frame:.1}/frame, {changing_micros:.1} us/write)",
+        repeated.bytes, changing.bytes
     );
-    assert!(repeated_bytes > 0);
-    assert!(changing_bytes > repeated_bytes * 4);
+    assert!(repeated.bytes > 0);
+    assert!(changing.bytes > repeated.bytes * 4);
     assert!(repeated_per_frame < 4_096.0);
     assert!(changing_per_frame < 16_384.0);
 }

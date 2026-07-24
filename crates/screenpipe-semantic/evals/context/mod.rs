@@ -13,6 +13,7 @@ use std::time::Instant;
 use tiktoken_rs::o200k_base_singleton;
 
 const CASES: &str = include_str!("cases.json");
+const PIPELINE_BENCHMARK_ITERATIONS: usize = 1_000;
 
 #[derive(Debug, Deserialize)]
 struct EvalCase {
@@ -44,6 +45,15 @@ pub struct TimingMetrics {
 }
 
 #[derive(Debug, Serialize)]
+pub struct PipelineBenchmarkMetrics {
+    pub iterations: usize,
+    pub mean_nanos: u128,
+    pub p50_nanos: u128,
+    pub p95_nanos: u128,
+    pub max_nanos: u128,
+}
+
+#[derive(Debug, Serialize)]
 pub struct CaseReport {
     pub id: String,
     pub parser: String,
@@ -55,6 +65,7 @@ pub struct CaseReport {
     pub semantic_vs_raw_prompt_token_reduction_percent: f64,
     pub semantic_vs_outline_prompt_token_reduction_percent: f64,
     pub timings: TimingMetrics,
+    pub pipeline_benchmark: PipelineBenchmarkMetrics,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -161,6 +172,7 @@ fn evaluate_case(
     let render_started = Instant::now();
     let semantic = render_semantic_context(&case.app, 7, &projection);
     let render_micros = render_started.elapsed().as_micros();
+    let pipeline_benchmark = benchmark_pipeline(registry, &case)?;
 
     let raw_metrics = format_metrics(&raw_json, &case.question, &case.facts);
     let outline_metrics = format_metrics(&outline, &case.question, &case.facts);
@@ -196,8 +208,44 @@ fn evaluate_case(
                 parse_micros,
                 render_micros,
             },
+            pipeline_benchmark,
         },
         prompts,
+    })
+}
+
+fn benchmark_pipeline(
+    registry: &screenpipe_semantic::ParserRegistry,
+    case: &EvalCase,
+) -> Result<PipelineBenchmarkMetrics, Box<dyn Error>> {
+    let mut samples = Vec::with_capacity(PIPELINE_BENCHMARK_ITERATIONS);
+    for iteration in 0..PIPELINE_BENCHMARK_ITERATIONS {
+        let started = Instant::now();
+        let adapted = adapt_captured_accessibility_tree(&case.nodes, TreeBudget::default())?;
+        let context = ParseContext {
+            frame_id: iteration as i64,
+            captured_at_unix_ms: 1_700_000_000_000,
+            app: &case.app,
+            input_content_hash: iteration as u64,
+        };
+        let result = registry.parse(&context, &adapted.tree, OutputBudget::default());
+        let ValidatedParseOutcome::Handled(projection) = result.outcome else {
+            return Err(
+                format!("{} benchmark parse did not produce semantic items", case.id).into(),
+            );
+        };
+        let rendered = render_semantic_context(&case.app, iteration as i64, &projection);
+        std::hint::black_box(rendered);
+        samples.push(started.elapsed().as_nanos());
+    }
+    samples.sort_unstable();
+    let percentile = |percent: usize| samples[(samples.len() - 1) * percent / 100];
+    Ok(PipelineBenchmarkMetrics {
+        iterations: samples.len(),
+        mean_nanos: samples.iter().sum::<u128>() / samples.len() as u128,
+        p50_nanos: percentile(50),
+        p95_nanos: percentile(95),
+        max_nanos: *samples.last().expect("benchmark has samples"),
     })
 }
 

@@ -9,10 +9,10 @@ privacy-safe accessibility trees:
 
 The report uses the exact `o200k_base` tokenizer. It scores both context-only
 tokens and the complete fixed Pi input prompt, retained task facts, tokens per
-retained fact, parser selection, compact-tree heap, and local
-adapt/parse/render timing. The seven cases cover the seven shared parser
-families; catalog tests separately keep all 47 Littlebird target profiles
-matched.
+retained fact, parser selection, compact-tree heap, and a 1,000-iteration local
+adapt/parse/render benchmark for each case. The seven cases cover the seven
+shared parser families; catalog tests separately keep all 47 Littlebird target
+profiles matched.
 
 Run the deterministic report:
 
@@ -51,6 +51,7 @@ SQLite page growth:
 cargo test -p screenpipe-db --test semantic_storage_test -- --nocapture
 ```
 
-The storage regression measures incremental semantic pages for repeated and
-changing synthetic traces. It does not claim total disk reduction because the
-capture path still retains existing raw text, tree JSON, elements, and media.
+The storage regression measures incremental semantic pages and write time for
+repeated and changing synthetic traces. It does not claim total disk reduction
+because opted-in capture still retains existing raw text, tree JSON, elements,
+and media.

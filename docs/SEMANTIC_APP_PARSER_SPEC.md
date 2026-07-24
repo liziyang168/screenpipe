@@ -1,6 +1,6 @@
 # Semantic App Parser
 
-> **Status**: Parser and normalized persistence foundation, not enabled in capture
+> **Status**: Experimental end-to-end path, opt-in and off by default
 > **Date**: 2026-07-24
 
 ## 1. Problem
@@ -55,9 +55,10 @@ the chain because it means the parser recognized a genuinely empty screen.
 
 The database integration adds normalized semantic runs and canonical items,
 frame linkage, full-text search, compact retrieval, and retention garbage
-collection. Capture does not enqueue parser work yet. This keeps database and
-retrieval review independent from the structural-capture and resource-budget
-work required before automatic writes are safe.
+collection. When `enableSemanticContext` is true, capture submits a durable
+frame and its existing accessibility snapshot to a bounded background worker.
+The setting defaults to false, so existing installs start no parser worker and
+keep the historical capture path.
 
 ## 3.1 Parser coverage model
 
@@ -125,7 +126,8 @@ This preserves generic accessibility instead of emitting an empty or misleading
 semantic result. Synthetic, privacy-safe fixtures cover every family, and the
 editor fixtures cover all three platforms. They are contract fixtures, not proof
 that current platform walkers retain every required structural node. Capture
-integration remains a separate measured milestone.
+activation is implemented, while production-fidelity structural capture remains
+a separate measured milestone.
 
 ### Real-capture replay checkpoint
 
@@ -175,29 +177,35 @@ not sufficient for conversation, mail, task, and calendar relationships until
 the requested structural containers are retained.
 
 The existing text-oriented `TreeSnapshot.nodes` and database element behavior
-stay unchanged until the semantic path is proven.
+remain unchanged in this experimental rollout. This means conservative family
+parsers can abstain on real app versions that do not expose enough structure.
+Selective structural capture remains the main recall improvement after the
+opt-in path is measured.
 
 ## 5. Scheduling
 
 Do not parse inside `paired_capture`, the frame transaction, or deferred element
 insertion.
 
-After `paired_capture` returns a durable `frame_id`, move the compact tree into a
-bounded parser actor with `try_send`. The capture loop never awaits capacity.
+After `paired_capture` returns a durable `frame_id`, move the snapshot into a
+bounded parser actor with a synchronous latest-value replacement. The capture
+loop never awaits parser or database capacity.
 
-Actor policy:
+Current actor policy:
 
-- capacity 8
-- latest job wins per app/window
-- one low-priority worker
+- one pending job for the whole worker, replaced by the latest durable frame
+- one worker task and no parser work when the feature is disabled
 - no screenshots in jobs
-- 20 ms hard deadline
-- 8 to 16 MB scripting heap if a scripting runtime is added
-- 64 KB and 256 item output caps
-- drop stale work under memory, battery, capture, or database pressure
+- parser output capped at 64 KB and 256 items
+- stale pending work is replaced instead of building a FIFO backlog
+- parser or database failures fail open and leave generic capture available
 
-When `elements_ref_frame_id` and parser version identify an existing projection,
-reuse it without parsing.
+A scripting runtime, if later added, still requires an 8 to 16 MB heap limit
+and a 20 ms hard deadline.
+
+The current database writer reuses an identical run after parsing. A future
+pre-parse shortcut may use an existing element reference only if parser version,
+app identity, and the structural fingerprint are all proven identical.
 
 ## 6. Parser runtime
 
@@ -214,10 +222,11 @@ The parser ABI and stored output must remain independent of the chosen runtime.
 
 ## 7. Storage
 
-The normalized migration and transactional write/read adapter are implemented,
-but capture does not call the writer yet. Parsed output is persisted only by an
-explicit caller or test. Current screenshot, accessibility, element, and raw-text
-writes are unchanged, so this PR does not reduce disk use by itself.
+The normalized migration and transactional write/read adapter are implemented.
+Opted-in capture calls the writer only after the source frame is durable and a
+parser returns a validated handled projection. Current screenshot,
+accessibility, element, and raw-text writes are unchanged, so this PR does not
+reduce disk use by itself.
 
 Today a stored accessibility frame can contain `accessibility_text`, a derived
 `full_text`, `accessibility_tree_json`, and normalized `elements`. Exact content
@@ -271,10 +280,9 @@ search text, durable user facts, and generated files respectively.
 
 Keep both forms only while they serve distinct purposes:
 
-- Before activation and in the metrics-only shadow phase: write no semantic
-  data.
-- During the measured rollout: keep existing raw/generic evidence and normalized
-  semantic records so parser recall and fallback can be compared.
+- With the default disabled setting: write no semantic data.
+- During the opt-in measured rollout: keep existing raw/generic evidence and
+  normalized semantic records so parser recall and fallback can be compared.
 - After a successful parse is durable and the retention/redaction gates pass,
   `lean` mode may keep `full_text` plus semantic items while clearing heavy tree,
   geometry, element, and source-node evidence.
@@ -296,9 +304,9 @@ The database API supports exact-frame and bounded time/app/full-text queries.
 `GET /semantic/context` exposes grouped compact text by default and typed JSON
 with parser provenance when `format=json` is passed.
 
-Add one MCP tool rather than app-specific tools only when the bounded capture
-worker is enabled. Registering an always-empty tool before automatic writes
-would increase every agent's tool-schema tokens without providing context.
+The `semantic-context` MCP tool wraps the same bounded endpoint and returns
+compact plain text. When no semantic records exist, it directs the agent back to
+`search-content` or `activity-summary`, preserving the old retrieval behavior.
 
 Default output is grouped plain text:
 
@@ -309,8 +317,9 @@ alice 10:02: notarization is blocking the release
 source frame: 481992
 ```
 
-After activation, the agent progression becomes activity summary, semantic app
-context, generic content search, element search, and pixels only when needed.
+When the feature is enabled, the agent progression becomes activity summary,
+semantic app context, generic content search, element search, and pixels only
+when needed.
 
 ## 9. Privacy and retention
 
@@ -362,15 +371,24 @@ structural containers in the platform walk; otherwise most current stored
 trees cannot express sender/message, task/status, or event/schedule
 relationships.
 
+The release-mode synthetic pipeline benchmark runs 1,000 adapt, parse, and
+render iterations for each family. On the 2026-07-24 development machine,
+per-case mean latency was 1.6 to 8.7 microseconds and p95 was 1.7 to 10.0
+microseconds. In-memory SQLite persistence measured 70.5 microseconds per reused
+run write and 158.2 microseconds per changing write. These are reproducible
+microbenchmarks, not the older-hardware or real-disk acceptance test.
+
 ## 11. Rollout
 
-1. Retain parser-requested structural containers in the existing platform walk
-   and replay every family against privacy-safe real-tree fixtures.
-2. Add the nonblocking shadow worker with metrics only and no database writes.
-3. Measure the structural fingerprint, then enable normalized writes behind a
-   feature flag with retention and redaction gates.
-4. Register one MCP semantic-context tool only after the writer is enabled.
-5. Measure token reduction and parser resource use on representative traces.
-6. Tighten profiles only from privacy-safe real-tree fixtures when a shared
+1. Ship normalized writes, synchronous PII removal, the latest-wins worker, and
+   the MCP tool behind `enableSemanticContext`, default false. Complete in this
+   change.
+2. Measure the opt-in path on an older Intel Mac and a representative Windows
+   enterprise laptop, including steady RSS and an eight-hour CPU trace.
+3. Retain parser-requested structural containers selectively in the existing
+   platform walk and replay every family against privacy-safe real-tree fixtures.
+4. Tighten profiles only from privacy-safe real-tree fixtures when a shared
    parser abstains or emits the wrong structure.
-7. Consider signed remote parser packs only after shipped parsers are stable.
+5. Consider a measured `lean` retention policy only after raw fallback and
+   deletion correctness are proven.
+6. Consider signed remote parser packs only after shipped parsers are stable.

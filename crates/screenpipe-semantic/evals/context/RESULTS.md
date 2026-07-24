@@ -15,10 +15,11 @@ Release-mode results across seven representative parser-family fixtures:
 Semantic context used 57.2% fewer complete input-prompt tokens than raw JSON
 and 43.7% fewer than the current outline. It retained task status, calendar
 schedule, and editor identity facts that the text-only outline dropped.
-Representative compact trees retained 507 to 1,315 heap bytes. In this small
-release-mode run, adapt, parse, and render operations were each measured in
-microseconds. These tiny synthetic timings are regression signals, not the
-older-hardware acceptance benchmark.
+Representative compact trees retained 507 to 1,315 heap bytes. A release-mode
+1,000-iteration adapt, parse, and render benchmark per family measured 1.6 to
+8.7 microseconds mean latency and 1.7 to 10.0 microseconds p95 latency. These
+tiny synthetic trees are regression signals, not the older-hardware acceptance
+benchmark.
 
 ## Local Pi model check
 
@@ -45,10 +46,10 @@ observations, and a nullable frame link. It never stores another tree JSON blob.
 The SQLite page-growth regression first inserts 1,000 ordinary frame rows, then
 measures only the active database pages added by semantic persistence:
 
-| synthetic trace | semantic growth | bytes per frame |
-|---|---:|---:|
-| 1,000 identical projections | 8,192 bytes | 8.2 |
-| 1,000 changing projections | 802,816 bytes | 802.8 |
+| synthetic trace | semantic growth | bytes per frame | release write time |
+|---|---:|---:|---:|
+| 1,000 identical projections | 8,192 bytes | 8.2 | 70.5 us/frame |
+| 1,000 changing projections | 802,816 bytes | 802.8 | 158.2 us/frame |
 
 Identical frames share one run and one copy of each item. The changing trace
 keeps one stable conversation item but creates a run-scoped message version for
@@ -62,7 +63,18 @@ layer would be about 6.9 MB/day and 2.53 GB/year. These are page-level synthetic
 projections, not a measured user workload, and exclude screenshots, audio,
 existing text, tree JSON, and elements.
 
-This PR still does not reduce total storage because capture keeps all existing
-raw data. Reduction requires the later measured `lean` policy to clear heavy raw
-tree and geometry only after a durable successful parse. A representative
-real-capture trace remains necessary before choosing retention defaults.
+This PR does not reduce total storage because opted-in capture keeps all
+existing raw data. Reduction requires a later measured `lean` policy to clear
+heavy raw tree and geometry only after a durable successful parse. A
+representative real-capture trace remains necessary before choosing retention
+defaults.
+
+## Runtime boundary
+
+Structured app context is off by default. With the setting disabled, Screenpipe
+does not construct the parser registry or worker, enqueue trees, or write
+semantic rows. When enabled, one latest-value slot replaces stale pending work,
+one background task parses, and failures preserve the existing generic capture.
+The microbenchmarks above exclude task scheduling, synchronous PII replacement,
+real accessibility-tree sizes, and real-disk contention, so they do not prove
+the under-0.5-percent CPU or under-20-MB RSS acceptance gates yet.

@@ -147,6 +147,14 @@ impl ParserRegistry {
             .map(|registered| registered.parser.as_ref())
     }
 
+    /// Look up a registered parser by its stable manifest ID.
+    pub fn parser(&self, parser_id: &str) -> Option<&dyn SemanticParser> {
+        self.parsers
+            .iter()
+            .find(|registered| registered.parser.manifest().id == parser_id)
+            .map(|registered| registered.parser.as_ref())
+    }
+
     pub fn capture_plan(&self, app: &AppIdentity) -> Option<SemanticCapturePlan> {
         let mut candidates = self.matching(app);
         let mut plan = candidates.next()?.manifest().capture_plan();

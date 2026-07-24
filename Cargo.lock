@@ -8416,6 +8416,7 @@ dependencies = [
  "screenpipe-resource",
  "screenpipe-screen",
  "screenpipe-secrets",
+ "screenpipe-semantic",
  "screenpipe-vault",
  "sentry",
  "serde",
