@@ -37,3 +37,17 @@ model run, and repeated runs showed that raw and outline answers can vary. The
 deterministic token and fact-retention checks are the stable regression gate.
 Real-app accuracy still requires privacy-safe captures after platform walkers
 retain the structural containers requested by each parser family.
+
+## Storage boundary
+
+These results measure model context, not database size. This PR adds no semantic
+tables or writes, so it does not reduce or increase captured on-disk data.
+Persistence-neutral storage-key tests prove that identical parse inputs can
+reuse one run, stable and derived values can reuse immutable versions, changed
+values create new versions, and ephemeral messages never merge across runs.
+In the fixed cardinality regression, 100 identical frames produced one unique
+parse-run key and one copy of each of two item values. Across 100 distinct input
+hashes, the unchanged derived task reused one value while the ephemeral message
+produced 100 run-scoped values.
+Actual storage reduction requires the later normalized schema, retention
+integration, and a page-level SQLite comparison on the same fixed trace.

@@ -41,3 +41,8 @@ cargo run --release -p screenpipe-semantic --example context_eval --locked -- \
 
 The runner disables tools, extensions, skills, project context, sessions, and
 startup network checks. Only the privacy-safe synthetic suite enters the model.
+
+This suite measures AI input efficiency, not SQLite storage reduction. The
+current PR performs no semantic database writes. Storage-key unit tests cover
+exact parse-run reuse, immutable item versions, and run-scoped ephemeral items;
+an on-disk comparison belongs to the later schema and retention integration.

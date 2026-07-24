@@ -13,6 +13,7 @@ mod context;
 mod model;
 pub mod parsers;
 mod registry;
+mod storage;
 mod tree;
 mod validation;
 
@@ -29,6 +30,10 @@ pub use model::{
 pub use registry::{
     input_fingerprint, ParserChainResult, ParserFailure, ParserRegistry, RegistryError,
     MAX_PARSER_CANDIDATES,
+};
+pub use storage::{
+    semantic_item_storage_keys, semantic_projection_storage_keys, SemanticItemStorageKeys,
+    SemanticProjectionStorageKeys,
 };
 pub use tree::{
     NodeBounds, NodeId, SemanticNodeInput, SemanticTree, SemanticTreeBuilder, TreeBudget,

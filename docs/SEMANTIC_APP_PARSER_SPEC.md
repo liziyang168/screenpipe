@@ -211,19 +211,73 @@ The parser ABI and stored output must remain independent of the chosen runtime.
 
 ## 7. Storage
 
-Do not store one parsed JSON blob per frame. Repeated screens would repeat every
-message or document.
+This change does not add a migration, database table, background writer, or
+semantic write path. Parsed output exists only in memory in tests, replay, and
+evaluation. Current `frames`, `elements`, FTS, screenshot, and retention behavior
+is unchanged, so this PR reduces prompt tokens but does not reduce disk use.
 
-Proposed tables:
+Today a stored accessibility frame can contain `accessibility_text`, a derived
+`full_text`, `accessibility_tree_json`, and normalized `elements`. Exact content
+dedup can skip an eligible capture, and `elements_ref_frame_id` can share an
+anchor frame's normalized elements, but a stored frame can still repeat its text
+and tree JSON. Semantic persistence must not add another per-frame JSON copy.
+
+Do not store one parsed JSON blob per frame. Repeated screens would repeat every
+message or document. The normalized persistence contract is:
 
 - `semantic_parse_runs`: parser/version/input fingerprint/status/duration
 - `semantic_frame_refs`: frame to parse run, reusing identical projections
-- `semantic_items`: immutable canonical typed records
+- `semantic_items`: immutable, canonical, versioned typed records
 - `semantic_observations`: run membership, parent, order, and source node indexes
 - external-content semantic FTS
 
+Required keys and constraints:
+
+- `semantic_parse_runs.input_fingerprint` is unique. It includes parser ID,
+  parser version, schema version, app identity, and source content hash.
+- `semantic_frame_refs.frame_id` is unique, so one frame resolves to at most one
+  selected semantic projection.
+- Every item has an `entity_fingerprint` and a `version_fingerprint`.
+  `semantic_items.version_fingerprint` is unique and immutable.
+- Stable and derived items may reuse the same exact canonical version across
+  runs. Ephemeral items include the parse-run fingerprint in their entity key,
+  so equal message text or position-based keys from different screens never
+  merge.
+- Only stable identity supports authoritative cross-run entity history. A
+  derived entity key is an approximate grouping hint even when exact-value
+  reuse is safe.
+- Parent, order, parser-local ID, and source-node indexes live only in
+  `semantic_observations`. Moving an item within a screen must not duplicate its
+  canonical value.
+- A changed title, body, actor, time, status, or metadata value creates a new
+  immutable item version while preserving the entity fingerprint.
+
+`semantic_item_storage_keys` implements this contract without I/O. It also
+domain-separates entity and version hashes and scopes them by parser and app.
+The storage adapter must bind the 32-byte values as BLOBs, not hex text.
+
 Do not overload `frames.full_text`, `memories`, or `outputs`. They represent raw
 search text, durable user facts, and generated files respectively.
+
+### Raw and parsed retention
+
+Keep both forms only while they serve distinct purposes:
+
+- Before activation and in the metrics-only shadow phase: write no semantic
+  data.
+- During the measured rollout: keep existing raw/generic evidence and normalized
+  semantic records so parser recall and fallback can be compared.
+- After a successful parse is durable and the retention/redaction gates pass,
+  `lean` mode may keep `full_text` plus semantic items while clearing heavy tree,
+  geometry, element, and source-node evidence.
+- If parsing abstains or fails, preserve the current generic accessibility/OCR
+  path. Never delete the only usable representation.
+
+Storage reduction is therefore a later retention outcome, not an automatic
+consequence of parsing. The schema PR must report SQLite page-level bytes for the
+same fixed trace in current full, current lean, semantic full, and semantic lean
+modes after checkpoint and compaction. It must separately report media bytes,
+database bytes, reused parse runs, reused item versions, and parse failures.
 
 ## 8. Retrieval
 

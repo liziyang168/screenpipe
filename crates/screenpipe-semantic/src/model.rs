@@ -235,8 +235,12 @@ pub enum SemanticKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IdentityQuality {
+    /// Backed by an app-native identifier whose meaning survives screen changes.
     Stable,
+    /// Deterministically derived from visible fields. Useful for exact-value
+    /// reuse, but consumers must treat cross-run entity grouping as approximate.
     Derived,
+    /// Valid only within one parse run, for example a positional message index.
     Ephemeral,
 }
 
