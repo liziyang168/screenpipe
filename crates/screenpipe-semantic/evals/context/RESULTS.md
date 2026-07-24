@@ -41,27 +41,27 @@ The new ChatGPT case was answered correctly in all three formats.
 
 ## Privacy-safe real-data replay
 
-A time-distributed 30-day replay sampled up to 25 valid trees from each of the
+A time-distributed 30-day replay sampled up to 100 valid trees from each of the
 25 highest-volume apps in the local Screenpipe database. Apps with fewer trees
-made the actual batch 523 frames. The replay fetched exact selected frame IDs
+made the actual batch 1,608 frames. The replay fetched exact selected frame IDs
 into a mode-0600 temporary file, deleted that private tree export before report
 generation, and retained only structural metrics:
 
 | metric | result |
 |---|---:|
-| app-identity matched frames | 163/523 |
-| handled frames | 67/523 |
-| handled among identity matches | 41.1% |
-| raw tokens across handled frames | 1,003,519 |
-| semantic tokens across handled frames | 33,479 |
-| token reduction on handled frames | 96.66% |
-| mean compact-tree build | 29.33 us/frame |
-| mean parser chain | 6.96 us/frame |
+| app-identity matched frames | 409/1,608 |
+| handled frames | 156/1,608 |
+| handled among identity matches | 38.14% |
+| raw tokens across handled frames | 2,680,529 |
+| semantic tokens across handled frames | 122,552 |
+| token reduction on handled frames | 95.43% |
+| mean compact-tree build | 21.99 us/frame |
+| mean parser chain | 4.92 us/frame |
 | maximum compact-tree heap | 180,251 bytes |
 | parser failures | 0 |
 
-Handled app samples were ChatGPT 1/25, Claude 8/25, Notion 11/15,
-Obsidian 23/25, and Terminal 24/24. A separate 100-frame ChatGPT replay found
+Handled app samples were ChatGPT 4/100, Claude 19/62, Notion 11/15,
+Obsidian 98/100, and Terminal 24/24. The 100-frame ChatGPT sample found
 both explicit actor headings on four frames; the app override handled all four
 and reduced their combined context by 95.35%. The other 96 frames represented
 other screen states, so 4% is screen-state coverage, not parser accuracy.
