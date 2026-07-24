@@ -143,3 +143,13 @@ fn unmatched_editor_screen_abstains_for_generic_accessibility() {
         ValidatedParseOutcome::NotHandled
     );
 }
+
+#[test]
+fn inaccessible_buffer_abstains_instead_of_emitting_placeholder_text() {
+    assert_eq!(
+        parse_fixture(include_str!(
+            "fixtures/editor/vscode_inaccessible_buffer.json"
+        )),
+        ValidatedParseOutcome::NotHandled
+    );
+}
