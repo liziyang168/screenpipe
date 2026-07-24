@@ -461,6 +461,10 @@ pub struct TreeWalkerConfig {
     pub monitor_height: f64,
     /// Automatically detect and skip incognito / private browsing windows.
     pub ignore_incognito_windows: bool,
+    /// Resolve a stable application identifier for downstream semantic parsing.
+    /// Disabled by default so the historical capture path avoids extra process
+    /// metadata lookups when semantic context is not enabled.
+    pub capture_app_identity: bool,
     /// Per-walk override for `max_nodes` (set by adaptive budget, takes precedence).
     pub max_nodes_override: Option<usize>,
     /// Per-walk override for `walk_timeout` (set by adaptive budget, takes precedence).
@@ -504,6 +508,7 @@ impl Default for TreeWalkerConfig {
             monitor_width: 0.0,
             monitor_height: 0.0,
             ignore_incognito_windows: true,
+            capture_app_identity: false,
             max_nodes_override: None,
             walk_timeout_override: None,
             enable_line_bounds: true,
@@ -757,6 +762,7 @@ mod tests {
         assert_eq!(config.max_nodes, 5000);
         assert_eq!(config.walk_timeout, Duration::from_millis(250));
         assert_eq!(config.max_text_length, 50_000);
+        assert!(!config.capture_app_identity);
     }
 
     #[test]

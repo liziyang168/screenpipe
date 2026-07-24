@@ -643,10 +643,11 @@ impl MacosTreeWalker {
         // 1. Get the focused application via the AX system-wide element.
         // This stays within the accessibility stack instead of relying on
         // NSWorkspace's foreground-app state from a background thread.
-        let (focused_app, pid, app_name, app_id) = match resolve_focused_ax_app() {
-            Some(focused) => focused,
-            None => return Ok(TreeWalkResult::NotFound),
-        };
+        let (focused_app, pid, app_name, app_id) =
+            match resolve_focused_ax_app(self.config.capture_app_identity) {
+                Some(focused) => focused,
+                None => return Ok(TreeWalkResult::NotFound),
+            };
 
         // Skip excluded apps (password managers, etc.)
         let app_lower = app_name.to_lowercase();
@@ -1987,7 +1988,9 @@ fn frontmost_pid_via_window_server() -> Option<i32> {
     None
 }
 
-fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String, Option<String>)> {
+fn resolve_focused_ax_app(
+    capture_app_identity: bool,
+) -> Option<(Retained<ax::UiElement>, i32, String, Option<String>)> {
     // The AX system-wide focusedApplication is not just *empty* for
     // Chromium/Electron apps that haven't materialized their AX tree — it
     // can go STALE, still reporting the previously focused app. A walker
@@ -2008,7 +2011,9 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String, Opt
                 .localized_name()
                 .map(|s| s.to_string())
                 .unwrap_or_default();
-            let app_id = app.bundle_id().map(|s| s.to_string());
+            let app_id = capture_app_identity
+                .then(|| app.bundle_id().map(|s| s.to_string()))
+                .flatten();
             return Some((pid, app_name, app_id));
         }
         None
@@ -2030,7 +2035,8 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String, Opt
                     );
                 }
                 _ => {
-                    let (app_name, app_id) = localized_app_metadata_for_pid(pid);
+                    let (app_name, app_id) =
+                        localized_app_metadata_for_pid(pid, capture_app_identity);
                     return Some((focused_app, pid, app_name, app_id));
                 }
             }
@@ -2042,7 +2048,7 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String, Opt
     // from the frontmost pid so Obsidian/Discord/Claude can still be walked
     // instead of falling straight to OCR.
     if let Some(pid) = front_pid {
-        let fallback_metadata = localized_app_metadata_for_pid(pid);
+        let fallback_metadata = localized_app_metadata_for_pid(pid, capture_app_identity);
         let app_name = match &ws_active {
             Some((ws_pid, ws_name, _)) if *ws_pid == pid => ws_name.clone(),
             _ => fallback_metadata.0,
@@ -2060,10 +2066,13 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String, Opt
 }
 
 fn localized_app_name_for_pid(pid: i32) -> String {
-    localized_app_metadata_for_pid(pid).0
+    localized_app_metadata_for_pid(pid, false).0
 }
 
-fn localized_app_metadata_for_pid(pid: i32) -> (String, Option<String>) {
+fn localized_app_metadata_for_pid(
+    pid: i32,
+    capture_app_identity: bool,
+) -> (String, Option<String>) {
     cidre::objc::ar_pool(|| {
         let Some(app) = ns::RunningApp::with_pid(pid) else {
             return (String::new(), None);
@@ -2072,7 +2081,9 @@ fn localized_app_metadata_for_pid(pid: i32) -> (String, Option<String>) {
             app.localized_name()
                 .map(|s| s.to_string())
                 .unwrap_or_default(),
-            app.bundle_id().map(|s| s.to_string()),
+            capture_app_identity
+                .then(|| app.bundle_id().map(|s| s.to_string()))
+                .flatten(),
         )
     })
 }

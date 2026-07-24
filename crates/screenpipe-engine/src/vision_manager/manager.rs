@@ -491,6 +491,7 @@ impl VisionManager {
             monitor_width: monitor.width() as f64,
             monitor_height: monitor.height() as f64,
             ignore_incognito_windows: self.config.ignore_incognito_windows,
+            capture_app_identity: self.config.enable_semantic_context,
             ..TreeWalkerConfig::default()
         };
 

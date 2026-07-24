@@ -1137,10 +1137,10 @@ impl TreeWalkerPlatform for LinuxTreeWalker {
         // file, or read error — never panics. AT-SPI's Document
         // interface is too uneven across toolkits to rely on.
         let document_path = super::electron_docs::resolve_electron_doc_path(&app_lower);
-        let executable = (pid > 0)
+        let executable = (self.config.capture_app_identity && pid > 0)
             .then(|| crate::platform::linux::get_process_name(pid))
             .flatten()
-            .or_else(|| Some(app_name.clone()));
+            .or_else(|| self.config.capture_app_identity.then(|| app_name.clone()));
         Ok(TreeWalkResult::Found(TreeSnapshot {
             app_name,
             app_id: None,
