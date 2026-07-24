@@ -131,3 +131,10 @@ fn bounds_per_node_class_scratch_space() {
 
     assert!(adapt_captured_accessibility_tree(&nodes, TreeBudget::default()).is_err());
 }
+
+#[test]
+fn serialized_capture_shape_omits_absent_optional_fields() {
+    let json = serde_json::to_string(&node("AXWindow", "title", 0)).unwrap();
+    assert_eq!(json, r#"{"role":"AXWindow","text":"title","depth":0}"#);
+    assert!(!json.contains("null"));
+}

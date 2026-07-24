@@ -8,7 +8,6 @@ use screenpipe_semantic::{
     CapturedAccessibilityNode, OutputBudget, ParseContext, TreeBudget, ValidatedParseOutcome,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::error::Error;
 use std::time::Instant;
 use tiktoken_rs::o200k_base_singleton;
@@ -105,13 +104,12 @@ struct EvaluatedCase {
 }
 
 pub fn evaluate_suite() -> Result<EvalReport, Box<dyn Error>> {
-    let raw_cases: Vec<Value> = serde_json::from_str(CASES)?;
     let cases: Vec<EvalCase> = serde_json::from_str(CASES)?;
     let registry = builtin_parser_registry()?;
     let parser_families = registry.len();
     let mut reports = Vec::with_capacity(cases.len());
-    for (case, raw_case) in cases.into_iter().zip(raw_cases.iter()) {
-        reports.push(evaluate_case(&registry, case, raw_case)?.report);
+    for case in cases {
+        reports.push(evaluate_case(&registry, case)?.report);
     }
     let totals = aggregate(&reports);
     Ok(EvalReport {
@@ -125,12 +123,11 @@ pub fn evaluate_suite() -> Result<EvalReport, Box<dyn Error>> {
 }
 
 pub fn prompt_records() -> Result<Vec<PromptRecord>, Box<dyn Error>> {
-    let raw_cases: Vec<Value> = serde_json::from_str(CASES)?;
     let cases: Vec<EvalCase> = serde_json::from_str(CASES)?;
     let registry = builtin_parser_registry()?;
     let mut prompts = Vec::with_capacity(cases.len() * 3);
-    for (case, raw_case) in cases.into_iter().zip(raw_cases.iter()) {
-        prompts.extend(evaluate_case(&registry, case, raw_case)?.prompts);
+    for case in cases {
+        prompts.extend(evaluate_case(&registry, case)?.prompts);
     }
     Ok(prompts)
 }
@@ -138,13 +135,8 @@ pub fn prompt_records() -> Result<Vec<PromptRecord>, Box<dyn Error>> {
 fn evaluate_case(
     registry: &screenpipe_semantic::ParserRegistry,
     case: EvalCase,
-    raw_case: &Value,
 ) -> Result<EvaluatedCase, Box<dyn Error>> {
-    let raw_json = serde_json::to_string(
-        raw_case
-            .get("nodes")
-            .ok_or_else(|| format!("{} has no nodes", case.id))?,
-    )?;
+    let raw_json = serde_json::to_string(&case.nodes)?;
     let outline = render_current_outline(&case.nodes);
 
     let adapt_started = Instant::now();

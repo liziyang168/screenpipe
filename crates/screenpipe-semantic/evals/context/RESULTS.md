@@ -8,11 +8,11 @@ Release-mode results across seven representative parser-family fixtures:
 
 | format | retained facts | context tokens | complete prompt tokens | tokens per retained fact |
 |---|---:|---:|---:|---:|
-| raw accessibility JSON | 21/21 | 872 | 1,151 | 41.52 |
+| raw accessibility JSON | 21/21 | 839 | 1,118 | 39.95 |
 | current element outline | 17/21 | 572 | 851 | 33.65 |
 | semantic context | 21/21 | 200 | 479 | 9.52 |
 
-Semantic context used 58.4% fewer complete input-prompt tokens than raw JSON
+Semantic context used 57.2% fewer complete input-prompt tokens than raw JSON
 and 43.7% fewer than the current outline. It retained task status, calendar
 schedule, and editor identity facts that the text-only outline dropped.
 Representative compact trees retained 507 to 1,315 heap bytes. In this small
@@ -28,8 +28,8 @@ skills, extensions, sessions, and startup network checks disabled:
 
 | format | correct answers |
 |---|---:|
-| raw accessibility JSON | 5/7 |
-| current element outline | 3/7 |
+| raw accessibility JSON | 6/7 |
+| current element outline | 1/7 |
 | semantic context | 7/7 |
 
 This model result is exploratory and not a CI gate. It is a single small local

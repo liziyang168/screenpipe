@@ -568,7 +568,9 @@ fn first_root_title(tree: &SemanticTree) -> Option<&str> {
             .or_else(|| tree.text(root))
             .or_else(|| tree.value(root))
             .map(str::trim)
-            .filter(|title| !title.is_empty())
+            .filter(|title| {
+                !title.is_empty() && title.len() <= 240 && !title.contains(['\n', '\r'])
+            })
     })
 }
 
