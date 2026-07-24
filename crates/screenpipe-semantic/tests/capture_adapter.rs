@@ -48,6 +48,7 @@ fn maps_current_capture_fields_without_copying_an_object_tree() {
         }),
         on_screen: Some(true),
         automation_id: Some("document-editor".into()),
+        dom_identifier: Some("workbench.parts.editor".into()),
         class_name: Some("editor-instance selected".into()),
         value: Some("release notes".into()),
         help_text: Some("Document body".into()),
@@ -62,6 +63,10 @@ fn maps_current_capture_fields_without_copying_an_object_tree() {
 
     assert_eq!(adapted.tree.text(root), Some("release notes"));
     assert_eq!(adapted.tree.identifier(root), Some("document-editor"));
+    assert_eq!(
+        adapted.tree.dom_identifier(root),
+        Some("workbench.parts.editor")
+    );
     assert_eq!(adapted.tree.description(root), Some("Document body"));
     assert_eq!(
         adapted.tree.subrole(root),

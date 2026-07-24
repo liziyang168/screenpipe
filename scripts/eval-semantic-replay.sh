@@ -118,8 +118,9 @@ fi
 
 health_file="$tmp_dir/health.json"
 curl -fsS --max-time 10 http://localhost:3030/health -o "$health_file"
-if [[ $(jq -r '.status // empty' "$health_file") != "healthy" ]]; then
-  printf '%s\n' "screenpipe at localhost:3030 is not healthy" >&2
+health_status=$(jq -r '.status // empty' "$health_file")
+if [[ "$health_status" != "healthy" && "$health_status" != "degraded" ]]; then
+  printf '%s\n' "screenpipe at localhost:3030 is unavailable" >&2
   exit 1
 fi
 
@@ -206,6 +207,22 @@ fi
 replay_bin="$repo_root/target/release/examples/replay"
 metrics_file="$tmp_dir/metrics.jsonl"
 jq -c --arg platform "$platform" '
+  def macos_app_id($app):
+    {
+      "Calendar": "com.apple.iCal",
+      "Discord": "com.hnc.Discord",
+      "Gemini": "com.google.GeminiMacOS",
+      "Mail": "com.apple.mail",
+      "Messages": "com.apple.MobileSMS",
+      "Microsoft To Do": "com.microsoft.to-do-mac",
+      "Microsoft Word": "com.microsoft.Word",
+      "Notes": "com.apple.Notes",
+      "OmniFocus": "com.omnigroup.OmniFocus4",
+      "Pages": "com.apple.iWork.Pages",
+      "Slack": "com.tinyspeck.slackmacgap",
+      "TextEdit": "com.apple.TextEdit",
+      "WhatsApp": "net.whatsapp.WhatsApp"
+    }[$app] // null;
   .[]
   | (.app_name | gsub("[\u200e\u200f]"; "")) as $app
   | {
@@ -214,7 +231,7 @@ jq -c --arg platform "$platform" '
       content_hash: .id,
       app: {
         platform: $platform,
-        app_id: null,
+        app_id: (if $platform == "macos" then macos_app_id($app) else null end),
         executable: $app,
         display_name: $app,
         version: null,

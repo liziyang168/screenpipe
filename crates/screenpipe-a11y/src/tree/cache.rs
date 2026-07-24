@@ -103,6 +103,7 @@ mod tests {
             window_name: window.to_string(),
             text_content: text.to_string(),
             nodes: vec![],
+            semantic_nodes: vec![],
             browser_url: None,
             document_path: None,
             timestamp: Utc::now(),

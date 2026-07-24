@@ -28,6 +28,8 @@ pub struct CapturedAccessibilityNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub automation_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dom_identifier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
@@ -155,6 +157,7 @@ pub fn adapt_captured_accessibility_tree(
                 value: node.value.as_deref().and_then(nonempty),
                 description,
                 identifier: node.automation_id.as_deref().and_then(nonempty),
+                dom_identifier: node.dom_identifier.as_deref().and_then(nonempty),
                 classes,
                 flags: captured_node_flags(node),
                 bounds: node.bounds,

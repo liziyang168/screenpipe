@@ -148,12 +148,7 @@ async fn process_semantic_job(
     }
 
     let started = Instant::now();
-    let nodes = job
-        .snapshot
-        .nodes
-        .iter()
-        .map(|node| captured_node(node, job.redact_pii))
-        .collect::<Vec<_>>();
+    let nodes = captured_semantic_nodes(&job.snapshot, job.redact_pii);
     let adapted = adapt_captured_accessibility_tree(&nodes, TreeBudget::default())?;
     // The compact tree owns its interned strings. Release transient adapter
     // copies before parsing and database work.
@@ -217,6 +212,38 @@ async fn process_semantic_job(
     Ok(())
 }
 
+fn captured_semantic_nodes(
+    snapshot: &TreeSnapshot,
+    redact_pii: bool,
+) -> Vec<CapturedAccessibilityNode> {
+    if snapshot.semantic_nodes.is_empty() {
+        return snapshot
+            .nodes
+            .iter()
+            .map(|node| captured_node(node, redact_pii))
+            .collect();
+    }
+
+    let mut nodes = Vec::with_capacity(snapshot.nodes.len() + snapshot.semantic_nodes.len());
+    let mut raw = snapshot.nodes.iter().peekable();
+    let mut semantic = snapshot.semantic_nodes.iter().peekable();
+    while raw.peek().is_some() || semantic.peek().is_some() {
+        let take_raw = match (raw.peek(), semantic.peek()) {
+            (Some(raw), Some(semantic)) => raw.walk_index <= semantic.walk_index,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => break,
+        };
+        let node = if take_raw {
+            raw.next().expect("peeked raw semantic node")
+        } else {
+            semantic.next().expect("peeked structural semantic node")
+        };
+        nodes.push(captured_node(node, redact_pii));
+    }
+    nodes
+}
+
 fn captured_node(node: &AccessibilityTreeNode, redact_pii: bool) -> CapturedAccessibilityNode {
     CapturedAccessibilityNode {
         role: node.role.clone(),
@@ -230,9 +257,18 @@ fn captured_node(node: &AccessibilityTreeNode, redact_pii: bool) -> CapturedAcce
         }),
         on_screen: node.on_screen,
         automation_id: node.automation_id.clone(),
-        class_name: node.class_name.clone(),
+        dom_identifier: node.semantic_dom_identifier.clone(),
+        class_name: node
+            .semantic_dom_classes
+            .clone()
+            .or_else(|| node.class_name.clone()),
         value: sanitize_optional(node.value.as_deref(), redact_pii),
-        help_text: sanitize_optional(node.help_text.as_deref(), redact_pii),
+        help_text: sanitize_optional(
+            node.semantic_description
+                .as_deref()
+                .or(node.help_text.as_deref()),
+            redact_pii,
+        ),
         url: sanitize_optional(node.url.as_deref(), redact_pii),
         placeholder: sanitize_optional(node.placeholder.as_deref(), redact_pii),
         role_description: sanitize_optional(node.role_description.as_deref(), redact_pii),
@@ -310,6 +346,7 @@ mod tests {
             truncation_reason: TruncationReason::None,
             max_depth_reached: 3,
             window_bounds: None,
+            semantic_nodes: Vec::new(),
             nodes,
         }
     }
@@ -334,6 +371,27 @@ mod tests {
         receiver.changed().await.expect("sender remains open");
         let pending = receiver.borrow_and_update().clone().expect("pending job");
         assert_eq!(pending.frame_id, 2);
+    }
+
+    #[test]
+    fn transient_structural_nodes_merge_in_original_walk_order() {
+        let mut snapshot = slack_snapshot("body");
+        for (index, node) in snapshot.nodes.iter_mut().enumerate() {
+            node.walk_index = (index * 2 + 2) as u32;
+        }
+        let mut window = node("AXWindow", "Slack", 0, None);
+        window.walk_index = 1;
+        window.semantic_only = true;
+        let mut thread = node("AXGroup", "", 1, Some("conversation-thread"));
+        thread.walk_index = 3;
+        thread.semantic_only = true;
+        snapshot.semantic_nodes = vec![window, thread];
+
+        let merged = captured_semantic_nodes(&snapshot, false);
+        assert_eq!(merged.len(), snapshot.nodes.len() + 2);
+        assert_eq!(merged[0].role, "AXWindow");
+        assert_eq!(merged[1].role, "AXWindow");
+        assert_eq!(merged[2].role, "AXGroup");
     }
 
     #[tokio::test]

@@ -6,6 +6,7 @@ mod catalog;
 mod chatgpt;
 mod editor;
 mod families;
+mod native_macos;
 
 pub use catalog::{builtin_app_profiles, AppFamily, BuiltinAppProfile};
 pub use chatgpt::ChatGptParser;
@@ -13,9 +14,13 @@ pub use editor::EditorFamilyParser;
 pub use families::FamilyParser;
 
 use crate::{ParserRegistry, RegistryError};
+use native_macos::native_macos_parsers;
 
 pub fn register_builtin_parsers(registry: &mut ParserRegistry) -> Result<(), RegistryError> {
     registry.register(Box::new(ChatGptParser::new()))?;
+    for parser in native_macos_parsers() {
+        registry.register(Box::new(parser))?;
+    }
     registry.register(Box::new(FamilyParser::terminal()))?;
     registry.register(Box::new(FamilyParser::mail()))?;
     registry.register(Box::new(EditorFamilyParser::new()))?;

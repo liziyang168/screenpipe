@@ -41,6 +41,71 @@ fn is_browser(app_lower: &str) -> bool {
     BROWSER_NAMES.iter().any(|b| app_lower.contains(b))
 }
 
+fn is_semantic_dom_app(app_lower: &str) -> bool {
+    is_browser(app_lower)
+        || is_vscode_like(app_lower)
+        || [
+            "asana",
+            "chatgpt",
+            "claude",
+            "clickup",
+            "discord",
+            "microsoft teams",
+            "notion",
+            "obsidian",
+            "slack",
+            "spark",
+            "superhuman",
+            "todoist",
+            "whatsapp",
+        ]
+        .iter()
+        .any(|name| app_lower.contains(name))
+}
+
+fn is_semantic_target_app(app_lower: &str) -> bool {
+    is_browser(app_lower)
+        || is_vscode_like(app_lower)
+        || [
+            "antigravity",
+            "asana",
+            "calendar",
+            "chatgpt",
+            "claude",
+            "clickup",
+            "cursor",
+            "discord",
+            "fantastical",
+            "gemini",
+            "ghostty",
+            "iterm",
+            "mail",
+            "messages",
+            "messenger",
+            "microsoft outlook",
+            "microsoft teams",
+            "microsoft to do",
+            "microsoft word",
+            "notes",
+            "notion",
+            "obsidian",
+            "omnifocus",
+            "pages",
+            "slack",
+            "spark",
+            "superhuman",
+            "terminal",
+            "textedit",
+            "todoist",
+            "toggl",
+            "warp",
+            "whatsapp",
+            "xcode",
+        ]
+        .iter()
+        .any(|name| app_lower.contains(name))
+}
+
 /// VS Code-fork Electron editors that use xterm.js for their integrated terminal.
 /// All share the same deep AX tree structure (terminal content at depth ~37 from
 /// the window root, inside the Electron AXWebArea).
@@ -887,13 +952,23 @@ impl MacosTreeWalker {
             walk_duration
         );
 
+        let (nodes, semantic_nodes) = if state.capture_semantic_structure {
+            state
+                .nodes
+                .into_iter()
+                .partition(|node| !node.semantic_only)
+        } else {
+            (state.nodes, Vec::new())
+        };
+
         Ok(TreeWalkResult::Found(TreeSnapshot {
             app_name,
             app_id,
             executable: None,
             window_name,
             text_content,
-            nodes: state.nodes,
+            nodes,
+            semantic_nodes,
             browser_url,
             document_path,
             timestamp: Utc::now(),
@@ -1020,6 +1095,12 @@ struct WalkState {
     /// Set to true when a browser extension popup matching an ignored pattern is
     /// detected. Signals the caller to skip the entire capture (including screenshot).
     hit_ignored_extension: bool,
+    /// Preserve only containers with parser-grade structural evidence. This is
+    /// opt-in and leaves the historical text-only capture path byte-for-byte
+    /// unchanged when semantic context is disabled.
+    capture_semantic_structure: bool,
+    /// Request DOM identity only for browser/Electron apps that can expose it.
+    capture_semantic_dom: bool,
     /// Per-frame budget for parameterized AX calls used by line-bounds capture.
     /// `None` when line capture is disabled — see `TreeWalkerConfig::enable_line_bounds`.
     line_budget: Option<LineBudget>,
@@ -1036,6 +1117,10 @@ impl WalkState {
         ignored_patterns: Vec<WindowPattern>,
         focused_app_lower: String,
     ) -> Self {
+        let capture_semantic_structure =
+            config.capture_semantic_structure && is_semantic_target_app(&focused_app_lower);
+        let capture_semantic_dom =
+            capture_semantic_structure && is_semantic_dom_app(&focused_app_lower);
         Self {
             text_buffer: String::with_capacity(4096),
             nodes: Vec::with_capacity(256),
@@ -1060,6 +1145,8 @@ impl WalkState {
             ignored_patterns,
             focused_app_lower,
             hit_ignored_extension: false,
+            capture_semantic_structure,
+            capture_semantic_dom,
             line_budget: if config.enable_line_bounds {
                 Some(LineBudget::new(
                     config.line_bounds_max_calls_per_frame,
@@ -1393,6 +1480,42 @@ thread_local! {
         cf::ArrayOf::from_slice(&names)
     };
 
+    /// Semantic capture extends the same primary AX request with identifier
+    /// and subrole. It remains one XPC round trip per visited element.
+    static SEMANTIC_BATCH_ATTR_NAMES: arc::R<cf::ArrayOf<ax::Attr>> = {
+        let names: [&ax::Attr; 8] = [
+            ax::attr::role(),
+            ax::attr::value(),
+            ax::attr::title(),
+            ax::attr::desc(),
+            ax::attr::pos(),
+            ax::attr::size(),
+            ax::attr::id(),
+            ax::attr::subrole(),
+        ];
+        cf::ArrayOf::from_slice(&names)
+    };
+
+    /// Browser and Electron surfaces additionally expose DOM identity. Native
+    /// apps stay on the smaller eight-attribute semantic batch.
+    static SEMANTIC_DOM_BATCH_ATTR_NAMES: arc::R<cf::ArrayOf<ax::Attr>> = {
+        let dom_identifier_name = cf::String::from_str("AXDOMIdentifier");
+        let dom_classes_name = cf::String::from_str("AXDOMClassList");
+        let names: [&ax::Attr; 10] = [
+            ax::attr::role(),
+            ax::attr::value(),
+            ax::attr::title(),
+            ax::attr::desc(),
+            ax::attr::pos(),
+            ax::attr::size(),
+            ax::attr::id(),
+            ax::attr::subrole(),
+            ax::Attr::with_string(&dom_identifier_name),
+            ax::Attr::with_string(&dom_classes_name),
+        ];
+        cf::ArrayOf::from_slice(&names)
+    };
+
     /// The automation-prop attribute names read by `fill_ax_props`, in request
     /// order. Batched separately from the primary six because `fill_ax_props`
     /// runs only for text-emitting nodes — folding these into the per-node batch
@@ -1412,6 +1535,23 @@ thread_local! {
         ];
         cf::ArrayOf::from_slice(&names)
     };
+
+    /// When semantic capture already fetched identifier and subrole in the
+    /// primary batch, omit them here. Text-bearing nodes therefore request the
+    /// same total number of AX attributes as the historical path.
+    static SEMANTIC_FILL_ATTR_NAMES: arc::R<cf::ArrayOf<ax::Attr>> = {
+        let names: [&ax::Attr; 8] = [
+            ax::attr::role_desc(),         // 0 role_description
+            ax::attr::help(),              // 1 help_text
+            ax::attr::placeholder_value(), // 2 placeholder (interactive)
+            ax::attr::url(),               // 3 url (interactive)
+            ax::attr::enabled(),           // 4 is_enabled (interactive)
+            ax::attr::focused(),           // 5 is_focused (interactive)
+            ax::attr::selected(),          // 6 is_selected (interactive)
+            ax::attr::expanded(),          // 7 is_expanded (interactive)
+        ];
+        cf::ArrayOf::from_slice(&names)
+    };
 }
 
 /// The six batched attributes for one node, coerced to match the individual
@@ -1425,6 +1565,10 @@ struct NodeAttrs {
     title: Option<String>,
     desc: Option<String>,
     frame: Option<(f64, f64, f64, f64)>,
+    identifier: Option<String>,
+    subrole: Option<String>,
+    dom_identifier: Option<String>,
+    dom_classes: Option<String>,
 }
 
 /// Coerce a batched entry to a `String` iff it is a `CFString` — the exact
@@ -1437,6 +1581,23 @@ fn batch_string(entry: &cf::Type) -> Option<String> {
     } else {
         None
     }
+}
+
+fn batch_string_list(entry: &cf::Type) -> Option<String> {
+    if entry.get_type_id() == cf::String::type_id() {
+        return batch_string(entry);
+    }
+    if entry.get_type_id() != cf::Array::type_id() {
+        return None;
+    }
+    let values: &cf::ArrayOf<cf::Type> = unsafe { std::mem::transmute(entry) };
+    let joined = values
+        .iter()
+        .filter_map(batch_string)
+        .filter(|value| !value.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!joined.is_empty()).then_some(joined)
 }
 
 /// Unwrap a batched `AXValue`-wrapped CGPoint — same as `get_element_frame`.
@@ -1474,18 +1635,40 @@ fn batch_bool(entry: &cf::Type) -> Option<bool> {
 /// trip. Returns `None` only when the batch call itself fails (invalid element,
 /// messaging timeout) — the same conditions under which the old `elem.role()`
 /// read would have failed and the node been skipped without walking children.
-fn read_node_attrs(elem: &ax::UiElement) -> Option<NodeAttrs> {
+fn read_node_attrs(
+    elem: &ax::UiElement,
+    capture_semantic_structure: bool,
+    capture_semantic_dom: bool,
+) -> Option<NodeAttrs> {
     let mut out: Option<arc::R<cf::ArrayOf<cf::Type>>> = None;
     // options = 0: the returned array is parallel to the request, with
     // AXError placeholders for missing attrs. Never stop-on-error (1) — one
     // missing attr would kill the whole batch.
-    let status = BATCH_ATTR_NAMES
-        .with(|names| unsafe { AXUIElementCopyMultipleAttributeValues(elem, names, 0, &mut out) });
+    let status = if capture_semantic_dom {
+        SEMANTIC_DOM_BATCH_ATTR_NAMES.with(|names| unsafe {
+            AXUIElementCopyMultipleAttributeValues(elem, names, 0, &mut out)
+        })
+    } else if capture_semantic_structure {
+        SEMANTIC_BATCH_ATTR_NAMES.with(|names| unsafe {
+            AXUIElementCopyMultipleAttributeValues(elem, names, 0, &mut out)
+        })
+    } else {
+        BATCH_ATTR_NAMES.with(|names| unsafe {
+            AXUIElementCopyMultipleAttributeValues(elem, names, 0, &mut out)
+        })
+    };
     if !status.is_ok() {
         return None;
     }
     let arr = out?;
-    if arr.len() < 6 {
+    let expected = if capture_semantic_dom {
+        10
+    } else if capture_semantic_structure {
+        8
+    } else {
+        6
+    };
+    if arr.len() < expected {
         return None;
     }
     let pos = batch_point(&arr[4]);
@@ -1500,22 +1683,133 @@ fn read_node_attrs(elem: &ax::UiElement) -> Option<NodeAttrs> {
         title: batch_string(&arr[2]),
         desc: batch_string(&arr[3]),
         frame,
+        identifier: capture_semantic_structure
+            .then(|| batch_string(&arr[6]))
+            .flatten(),
+        subrole: capture_semantic_structure
+            .then(|| batch_string(&arr[7]))
+            .flatten(),
+        dom_identifier: capture_semantic_dom
+            .then(|| batch_string(&arr[8]))
+            .flatten(),
+        dom_classes: capture_semantic_dom
+            .then(|| batch_string_list(&arr[9]))
+            .flatten(),
     })
+}
+
+/// Keep a small set of structurally meaningful containers for deterministic
+/// app parsers. Generic groups without an identifier are intentionally omitted
+/// so semantic capture does not turn into a full accessibility-tree archive.
+fn capture_structural_node(role_str: &str, depth: usize, attrs: &NodeAttrs, state: &mut WalkState) {
+    let structural_role = matches!(
+        role_str,
+        "AXWindow"
+            | "AXGroup"
+            | "AXScrollArea"
+            | "AXList"
+            | "AXRow"
+            | "AXTable"
+            | "AXWebArea"
+            | "AXDocumentArticle"
+            | "AXOutline"
+            | "AXCell"
+            | "AXPage"
+            | "AXLayoutItem"
+            | "AXGenericElement"
+            | "AXUnknown"
+    );
+    if !structural_role {
+        return;
+    }
+
+    let role_is_evidence = matches!(
+        role_str,
+        "AXWindow"
+            | "AXRow"
+            | "AXCell"
+            | "AXWebArea"
+            | "AXDocumentArticle"
+            | "AXOutline"
+            | "AXPage"
+            | "AXLayoutItem"
+            | "AXGenericElement"
+    );
+    if !role_is_evidence
+        && attrs.identifier.is_none()
+        && attrs.subrole.is_none()
+        && attrs.dom_identifier.is_none()
+        && attrs.dom_classes.is_none()
+    {
+        return;
+    }
+
+    let frame = attrs.frame;
+    let bounds = frame.and_then(|(x, y, w, h)| normalize_bounds(x, y, w, h, state));
+    let on_screen = frame.and_then(|(x, y, w, h)| is_on_screen(x, y, w, h, state));
+    let text = attrs
+        .title
+        .as_deref()
+        .or(attrs.desc.as_deref())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let mut node =
+        AccessibilityTreeNode::new(role_str.to_owned(), text, depth.min(255) as u8, bounds);
+    node.on_screen = on_screen;
+    node.walk_index = state.node_count.min(u32::MAX as usize) as u32;
+    node.semantic_only = true;
+    node.value = attrs
+        .value
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+    apply_primary_semantic_attrs(&mut node, attrs);
+    state.nodes.push(node);
+}
+
+fn apply_primary_semantic_attrs(node: &mut AccessibilityTreeNode, attrs: &NodeAttrs) {
+    if node.automation_id.is_none() {
+        node.automation_id = attrs.identifier.clone();
+    }
+    if node.subrole.is_none() {
+        node.subrole = attrs.subrole.clone();
+    }
+    node.semantic_description = attrs
+        .desc
+        .as_deref()
+        .map(str::trim)
+        .filter(|description| !description.is_empty())
+        .map(str::to_owned);
+    node.semantic_dom_identifier = attrs.dom_identifier.clone();
+    node.semantic_dom_classes = attrs.dom_classes.clone();
 }
 
 /// Fetch the ten `fill_ax_props` automation attributes in one XPC round trip.
 /// Returns the parallel values array (indices match `FILL_ATTR_NAMES`), or
 /// `None` on a failed batch — matching the old path, where every individual
 /// read would have failed and left each prop `None`.
-fn read_fill_attrs(elem: &ax::UiElement) -> Option<arc::R<cf::ArrayOf<cf::Type>>> {
+fn read_fill_attrs(
+    elem: &ax::UiElement,
+    capture_semantic_structure: bool,
+) -> Option<arc::R<cf::ArrayOf<cf::Type>>> {
     let mut out: Option<arc::R<cf::ArrayOf<cf::Type>>> = None;
-    let status = FILL_ATTR_NAMES
-        .with(|names| unsafe { AXUIElementCopyMultipleAttributeValues(elem, names, 0, &mut out) });
+    let status = if capture_semantic_structure {
+        SEMANTIC_FILL_ATTR_NAMES.with(|names| unsafe {
+            AXUIElementCopyMultipleAttributeValues(elem, names, 0, &mut out)
+        })
+    } else {
+        FILL_ATTR_NAMES.with(|names| unsafe {
+            AXUIElementCopyMultipleAttributeValues(elem, names, 0, &mut out)
+        })
+    };
     if !status.is_ok() {
         return None;
     }
     let arr = out?;
-    if arr.len() < 10 {
+    let expected = if capture_semantic_structure { 8 } else { 10 };
+    if arr.len() < expected {
         return None;
     }
     Some(arr)
@@ -1545,7 +1839,11 @@ fn walk_element(elem: &ax::UiElement, depth: usize, state: &mut WalkState) {
     // Fix 2: role, value, title, description, position and size for this node in
     // ONE XPC round trip. A failed batch (invalid element / timeout) skips the
     // node without walking children — identical to the old `elem.role()` failing.
-    let attrs = match read_node_attrs(elem) {
+    let attrs = match read_node_attrs(
+        elem,
+        state.capture_semantic_structure,
+        state.capture_semantic_dom,
+    ) {
         Some(a) => a,
         None => return,
     };
@@ -1589,6 +1887,7 @@ fn walk_element(elem: &ax::UiElement, depth: usize, state: &mut WalkState) {
 
     // Extract text from this element.
     // In VS Code terminal mode, suppress text outside the terminal AXList subtree.
+    let mut emitted_text_node = false;
     if should_extract_text(&role_str) {
         let emit = match state.app {
             AppState::VsCode {
@@ -1599,7 +1898,7 @@ fn walk_element(elem: &ax::UiElement, depth: usize, state: &mut WalkState) {
             _ => true,
         };
         if emit {
-            extract_text(elem, &role_str, depth, &attrs, state);
+            emitted_text_node = extract_text(elem, &role_str, depth, &attrs, state);
         }
     } else if role_str == "AXWebArea" {
         // Browser extension popup detection: AXWebArea nodes inside Chrome/Arc/Edge
@@ -1635,6 +1934,10 @@ fn walk_element(elem: &ax::UiElement, depth: usize, state: &mut WalkState) {
                 append_text(&mut state.text_buffer, val);
             }
         }
+    }
+
+    if state.capture_semantic_structure && !emitted_text_node {
+        capture_structural_node(&role_str, depth, &attrs, state);
     }
 
     if state.should_stop() {
@@ -1703,7 +2006,7 @@ fn extract_text(
     depth: usize,
     attrs: &NodeAttrs,
     state: &mut WalkState,
-) {
+) -> bool {
     // Element bounds come from the batched AXPosition/AXSize. The raw
     // screen-absolute frame is also passed to is_on_screen() so we know
     // whether the captured screenshot actually shows this element — see
@@ -1725,15 +2028,17 @@ fn extract_text(
                     bounds.clone(),
                 );
                 node.on_screen = on_screen;
+                node.walk_index = state.node_count.min(u32::MAX as usize) as u32;
                 node.value = Some(trimmed.clone());
-                fill_ax_props(&mut node, elem, role_str);
+                fill_ax_props(&mut node, elem, role_str, state.capture_semantic_structure);
+                apply_primary_semantic_attrs(&mut node, attrs);
                 // AXTextArea is the multi-line case (textarea, rich text views);
                 // the gate naturally skips single-line AXTextField/AXComboBox.
                 if role_str == "AXTextArea" {
                     node.lines = capture_lines_for_node(elem, &trimmed, &bounds, on_screen, state);
                 }
                 state.nodes.push(node);
-                return;
+                return true;
             }
         }
     }
@@ -1751,10 +2056,12 @@ fn extract_text(
                     bounds.clone(),
                 );
                 node.on_screen = on_screen;
-                fill_ax_props(&mut node, elem, role_str);
+                node.walk_index = state.node_count.min(u32::MAX as usize) as u32;
+                fill_ax_props(&mut node, elem, role_str, state.capture_semantic_structure);
+                apply_primary_semantic_attrs(&mut node, attrs);
                 node.lines = capture_lines_for_node(elem, &trimmed, &bounds, on_screen, state);
                 state.nodes.push(node);
-                return;
+                return true;
             }
         }
     }
@@ -1770,9 +2077,11 @@ fn extract_text(
                 bounds,
             );
             node.on_screen = on_screen;
-            fill_ax_props(&mut node, elem, role_str);
+            node.walk_index = state.node_count.min(u32::MAX as usize) as u32;
+            fill_ax_props(&mut node, elem, role_str, state.capture_semantic_structure);
+            apply_primary_semantic_attrs(&mut node, attrs);
             state.nodes.push(node);
-            return;
+            return true;
         }
     }
 
@@ -1787,10 +2096,14 @@ fn extract_text(
                 bounds,
             );
             node.on_screen = on_screen;
-            fill_ax_props(&mut node, elem, role_str);
+            node.walk_index = state.node_count.min(u32::MAX as usize) as u32;
+            fill_ax_props(&mut node, elem, role_str, state.capture_semantic_structure);
+            apply_primary_semantic_attrs(&mut node, attrs);
             state.nodes.push(node);
+            return true;
         }
     }
+    false
 }
 
 /// Append text to the buffer with a newline separator.
@@ -2267,7 +2580,12 @@ fn capture_lines_for_node(
 
 /// Fill automation properties on an AccessibilityTreeNode from an AX element.
 /// Only fetches bool states for interactive elements to limit IPC overhead.
-fn fill_ax_props(node: &mut AccessibilityTreeNode, elem: &ax::UiElement, role_str: &str) {
+fn fill_ax_props(
+    node: &mut AccessibilityTreeNode,
+    elem: &ax::UiElement,
+    role_str: &str,
+    capture_semantic_structure: bool,
+) {
     // Fix 2 (second batch): the automation props in ONE XPC round trip instead
     // of 4 (non-interactive) / 10 (interactive) individual reads. Coercion is
     // identical to the old `get_string_attr` / `get_bool_attr` reads. These
@@ -2276,21 +2594,26 @@ fn fill_ax_props(node: &mut AccessibilityTreeNode, elem: &ax::UiElement, role_st
     // one instant (more temporally coherent than the old sequential reads) is
     // fine; they may legitimately differ walk-to-walk. A failed batch leaves
     // every prop at its `None` default, exactly as the old per-read failures did.
-    let Some(vals) = read_fill_attrs(elem) else {
+    let Some(vals) = read_fill_attrs(elem, capture_semantic_structure) else {
         return;
     };
-    node.automation_id = batch_string(&vals[0]);
-    node.subrole = batch_string(&vals[1]);
-    node.role_description = batch_string(&vals[2]);
-    node.help_text = batch_string(&vals[3]);
+    let offset = if capture_semantic_structure {
+        0
+    } else {
+        node.automation_id = batch_string(&vals[0]);
+        node.subrole = batch_string(&vals[1]);
+        2
+    };
+    node.role_description = batch_string(&vals[offset]);
+    node.help_text = batch_string(&vals[offset + 1]);
     // Bool states and extra string attrs only for interactive elements.
     if is_interactive_role(role_str) {
-        node.placeholder = batch_string(&vals[4]);
-        node.url = batch_string(&vals[5]);
-        node.is_enabled = batch_bool(&vals[6]);
-        node.is_focused = batch_bool(&vals[7]);
-        node.is_selected = batch_bool(&vals[8]);
-        node.is_expanded = batch_bool(&vals[9]);
+        node.placeholder = batch_string(&vals[offset + 2]);
+        node.url = batch_string(&vals[offset + 3]);
+        node.is_enabled = batch_bool(&vals[offset + 4]);
+        node.is_focused = batch_bool(&vals[offset + 5]);
+        node.is_selected = batch_bool(&vals[offset + 6]);
+        node.is_expanded = batch_bool(&vals[offset + 7]);
     }
 }
 
@@ -2344,6 +2667,23 @@ mod tests {
         assert!(!is_browser("textedit"));
         assert!(!is_browser("visual studio code"));
         assert!(!is_browser("screenpipe"));
+    }
+
+    #[test]
+    fn semantic_structure_is_gated_to_supported_apps_and_browsers() {
+        for app in [
+            "slack",
+            "microsoft to do",
+            "obsidian",
+            "textedit",
+            "google chrome",
+            "cursor",
+        ] {
+            assert!(is_semantic_target_app(app), "{app}");
+        }
+        for app in ["finder", "activity monitor", "calculator", "zoom.us"] {
+            assert!(!is_semantic_target_app(app), "{app}");
+        }
     }
 
     #[test]

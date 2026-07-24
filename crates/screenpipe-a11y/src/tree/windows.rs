@@ -398,6 +398,7 @@ impl TreeWalkerPlatform for WindowsTreeWalker {
             window_name,
             text_content: text_buffer,
             nodes,
+            semantic_nodes: Vec::new(),
             browser_url,
             document_path,
             timestamp: Utc::now(),

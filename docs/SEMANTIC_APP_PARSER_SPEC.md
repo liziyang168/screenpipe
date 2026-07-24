@@ -121,13 +121,17 @@ calendar, and terminal implementations. Each implementation requires structural
 markers before it emits output. App identity by itself always returns
 `NotHandled`.
 
+The current registry has 21 implementations: seven shared family parsers, the
+ChatGPT override, and 13 native macOS overrides for Calendar, Discord, Gemini,
+Mail, Messages, Microsoft To Do, Microsoft Word, Notes, OmniFocus, Pages, Slack,
+TextEdit, and WhatsApp. The overrides use exact AX roles, subroles, or stable
+identifiers and safely abstain when their recognition contract is absent.
+
 The parsers abstain on unrecognized surfaces and inaccessible editor buffers.
 This preserves generic accessibility instead of emitting an empty or misleading
 semantic result. Synthetic, privacy-safe fixtures cover every family, and the
 editor fixtures cover all three platforms. They are contract fixtures, not proof
-that current platform walkers retain every required structural node. Capture
-activation is implemented, while production-fidelity structural capture remains
-a separate measured milestone.
+that every supported app version exposes the expected accessibility contract.
 
 ### Real-capture replay checkpoint
 
@@ -137,22 +141,23 @@ arena without committing private capture data. The `replay` example reports
 only node and attribute counts, parser selection, output size, heap estimates,
 and timings. It never prints semantic content.
 
-A read-only replay over nine recent local target-app frames on 2026-07-24
-confirmed the intended fail-open behavior:
+A read-only 90-day replay over 1,645 time-distributed local frames across 36
+apps on 2026-07-24 confirmed the intended fail-open behavior:
 
-- Obsidian and Terminal produced bounded document output.
-- ChatGPT, Claude, Mail, Notion, Notes, Messages, and WhatsApp returned
-  `NotHandled` rather than guessing.
-- The largest sampled tree had 584 retained nodes. Debug-build adaptation was
-  under 2 ms and parsing was under 1.4 ms for every sample.
-- Most sampled macOS trees had no class names and many depth gaps because the
-  current stored tree keeps text-emitting nodes, not every structural
-  container.
+- 424 frames matched a parser identity and 201 were handled, or 47.41% of
+  identity matches.
+- Handled frames used 95.24% fewer context tokens than their raw tree JSON.
+- Compact-tree construction averaged 19.37 microseconds per frame and the
+  parser chain averaged 4.41 microseconds per frame.
+- Maximum compact-tree heap was 180,251 bytes and there were zero parser
+  failures.
+- The Messages override handled 43 of 67 historical Messages screens using
+  exact balloon/title identifiers and reduced their context by 94.30%.
 
-This is evidence that runtime activation must retain parser-requested
-structural containers during the existing walk. Loosening family parsers around
-flat text would increase false relationships and is not an acceptable shortcut.
-Raw frames and extracted text remain local and are not test fixtures.
+Historical frames still lack the parser-only structural containers and DOM
+identity added by this design, so they cannot measure the fresh-capture recall
+of the new Slack, WhatsApp, task, and document overrides. Raw frames and
+extracted text remain local and are not test fixtures.
 
 ## 4. Capture integration
 
@@ -163,24 +168,23 @@ This prevents an app override from abstaining after capture omitted an attribute
 needed by its family fallback. Parser packs may request less data, but they
 cannot raise the engine's resource ceilings.
 
-Platform walkers should append every retained structural node to
-`SemanticTreeBuilder` while they perform the existing walk. On macOS the current
-walker already batches role, value, title, description, position, and size for
-each visited node. Retaining those fields should not add accessibility IPC.
-Optional DOM classes and identifiers should be added to the same batch only when
-the selected plan requests them.
+The macOS walker retains a bounded set of parser-relevant structural nodes while
+it performs the existing walk. Identifier and subrole extend the existing
+batched AX request, so semantic capture still performs one primary IPC round
+trip per visited node. DOM identifier and class list join that same request only
+for browser and Electron apps that can expose them.
 
 `TreeSnapshot` now carries a native bundle identifier or executable alongside
 the display name so parser selection does not depend on localized app names.
-The current text-oriented node list can be adapted for offline replay, but it is
-not sufficient for conversation, mail, task, and calendar relationships until
-the requested structural containers are retained.
+The current text-oriented node list can also be adapted for offline replay.
 
 The existing text-oriented `TreeSnapshot.nodes` and database element behavior
-remain unchanged in this experimental rollout. This means conservative family
-parsers can abstain on real app versions that do not expose enough structure.
-Selective structural capture remains the main recall improvement after the
-opt-in path is measured.
+remain unchanged in this experimental rollout. Parser-only containers live in a
+transient `TreeSnapshot.semantic_nodes` sidecar, are merged back into original
+walk order only in the semantic worker, and are skipped by serialization. This
+preserves the existing raw tree JSON and avoids duplicating structural capture
+on disk. Conservative parsers still abstain when an app version does not expose
+enough structure.
 
 ## 5. Scheduling
 
@@ -360,22 +364,21 @@ shared parser families. It compares persisted accessibility JSON, the current
 text-bearing element outline, and semantic plain text with the exact
 `o200k_base` tokenizer. Regression tests require every semantic case to retain
 all scored task facts while using a smaller complete prompt than both
-baselines. An opt-in Pi runner sends the balanced 21-prompt pack to a local or
+baselines. An opt-in Pi runner sends the balanced 24-prompt pack to a local or
 configured model with tools, project context, skills, extensions, and sessions
 disabled. Model accuracy is reported separately from deterministic fact
 retention and is never a network or credential requirement for CI.
 
 The synthetic suite verifies the representation contract, not real-app parser
-recall. Real-capture evaluation remains gated on retaining parser-requested
-structural containers in the platform walk; otherwise most current stored
-trees cannot express sender/message, task/status, or event/schedule
-relationships.
+recall. Fresh-capture evaluation is still required for app contracts that rely
+on the new transient structural sidecar because historical trees cannot express
+all sender/message, task/status, or event/schedule relationships.
 
 The release-mode synthetic pipeline benchmark runs 1,000 adapt, parse, and
 render iterations for each family. On the 2026-07-24 development machine,
-per-case mean latency was 1.6 to 8.7 microseconds and p95 was 1.7 to 10.0
-microseconds. In-memory SQLite persistence measured 70.5 microseconds per reused
-run write and 158.2 microseconds per changing write. These are reproducible
+per-case mean latency was 1.69 to 4.93 microseconds and p95 was 1.79 to 5.04
+microseconds. In-memory SQLite persistence measured 72.1 microseconds per reused
+run write and 156.4 microseconds per changing write. These are reproducible
 microbenchmarks, not the older-hardware or real-disk acceptance test.
 
 ## 11. Rollout

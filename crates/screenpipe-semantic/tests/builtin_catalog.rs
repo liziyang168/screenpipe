@@ -93,7 +93,7 @@ fn catalog_exactly_matches_all_47_targets() {
 #[test]
 fn every_profile_has_identity_family_and_bounded_registry_coverage() {
     let registry = builtin_parser_registry().expect("built-in manifests must compile");
-    assert_eq!(registry.len(), 8);
+    assert_eq!(registry.len(), 21);
     for profile in builtin_app_profiles() {
         assert!(!profile.families.is_empty(), "{} has no family", profile.id);
         let unique_families: HashSet<_> = profile.families.iter().copied().collect();
@@ -116,7 +116,22 @@ fn every_profile_has_identity_family_and_bounded_registry_coverage() {
         assert!(!plan.parser_ids.is_empty());
         let override_count = usize::from(matches!(
             profile.id,
-            "chatgpt" | "chatgptlegacy" | "chatgptweb"
+            "calendar"
+                | "chatgpt"
+                | "chatgptlegacy"
+                | "chatgptweb"
+                | "discord"
+                | "gemini_desktop"
+                | "mail"
+                | "messages"
+                | "microsofttodo"
+                | "microsoftword"
+                | "notes"
+                | "omnifocus"
+                | "pages"
+                | "slack"
+                | "textedit"
+                | "whatsapp"
         ));
         assert_eq!(
             plan.parser_ids.len(),

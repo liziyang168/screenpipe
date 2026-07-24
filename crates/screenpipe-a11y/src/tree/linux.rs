@@ -1148,6 +1148,7 @@ impl TreeWalkerPlatform for LinuxTreeWalker {
             window_name: window_title,
             text_content,
             nodes: state.nodes,
+            semantic_nodes: Vec::new(),
             browser_url,
             document_path,
             timestamp: Utc::now(),

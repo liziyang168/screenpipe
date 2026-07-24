@@ -1134,6 +1134,7 @@ mod tests {
                 bounds: None,
                 ..Default::default()
             }],
+            semantic_nodes: vec![],
             browser_url: Some("https://example.com".to_string()),
             document_path: None,
             timestamp: now,
@@ -1198,6 +1199,7 @@ mod tests {
             window_name: String::new(),
             text_content: String::new(),
             nodes: vec![],
+            semantic_nodes: vec![],
             browser_url: None,
             document_path: None,
             timestamp: now,
@@ -1314,6 +1316,7 @@ mod tests {
             window_name: "Test Window".to_string(),
             text_content: text,
             nodes,
+            semantic_nodes: vec![],
             browser_url: None,
             document_path: None,
             timestamp: Utc::now(),
