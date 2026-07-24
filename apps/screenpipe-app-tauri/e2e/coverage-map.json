@@ -282,7 +282,7 @@
       "criticality": "high",
       "confidence": "strong",
       "ux": "mixed",
-      "notes": "A collapsed Pipes section avoids loading run history; expanding it lists the complete installed-pipe inventory, and expanding a pipe lazily loads only its newest 10 saved runs."
+      "notes": "A collapsed Pipes section loads nothing; expanding it lists a compact execution-backed activity page, expanding a pipe lazily loads its newest 10 executions, and older runs paginate on demand."
     },
     {
       "spec": "chat-parallel-jobs-duplicate.spec.ts",
@@ -543,6 +543,16 @@
       "confidence": "conditional",
       "ux": "real-user-flow",
       "notes": "macOS-only recovery window for missing TCC permissions."
+    },
+    {
+      "spec": "sck-startup-recovery.spec.ts",
+      "platforms": ["macos"],
+      "layers": ["capture-ocr", "local-api", "os-integration"],
+      "features": ["app-launch", "capture-ocr", "health", "local-api-search"],
+      "criticality": "high",
+      "confidence": "conditional",
+      "ux": "api",
+      "notes": "Opt-in macOS fault injection verifies bounded SCK enumeration recovery, same-process capture, and OCR persistence."
     },
     {
       "spec": "pipes.spec.ts",
