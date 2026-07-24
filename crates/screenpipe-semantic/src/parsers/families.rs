@@ -161,7 +161,11 @@ fn parse_conversation(profile: &BuiltinAppProfile, tree: &SemanticTree) -> Vec<S
         format!("{}:conversation", profile.id),
         IdentityQuality::Derived,
     );
-    conversation.title = Some(profile.display_name.into());
+    conversation.title = Some(
+        first_root_title(tree)
+            .unwrap_or(profile.display_name)
+            .to_owned(),
+    );
     conversation
         .metadata
         .insert("app".into(), profile.display_name.into());
@@ -558,8 +562,14 @@ fn first_text_in(tree: &SemanticTree, root: NodeId) -> Option<&str> {
 }
 
 fn first_root_title(tree: &SemanticTree) -> Option<&str> {
-    tree.roots()
-        .find_map(|root| tree.title(root).or_else(|| tree.description(root)))
+    tree.roots().find_map(|root| {
+        tree.title(root)
+            .or_else(|| tree.description(root))
+            .or_else(|| tree.text(root))
+            .or_else(|| tree.value(root))
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+    })
 }
 
 fn node_content(tree: &SemanticTree, node: NodeId) -> Option<&str> {

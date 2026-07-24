@@ -86,6 +86,7 @@ fn conversation_fixture_preserves_sender_relationships() {
         "family.conversation",
     );
     assert_eq!(items.len(), 3);
+    assert_eq!(items[0].title.as_deref(), Some("#release - Slack"));
     assert_eq!(items[1].actor.as_deref(), Some("[user]"));
     assert_eq!(items[1].body.as_deref(), Some("retry the signing job"));
     assert_eq!(items[2].actor.as_deref(), Some("Alice"));

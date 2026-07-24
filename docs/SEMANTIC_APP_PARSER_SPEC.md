@@ -275,6 +275,22 @@ Token success is end-to-end tokens and tool calls needed to answer a fixed task
 suite, compared with current `full_text` and element-outline retrieval. Raw JSON
 compression alone is not a sufficient metric.
 
+The crate now includes a privacy-safe fixed context suite covering all seven
+shared parser families. It compares persisted accessibility JSON, the current
+text-bearing element outline, and semantic plain text with the exact
+`o200k_base` tokenizer. Regression tests require every semantic case to retain
+all scored task facts while using a smaller complete prompt than both
+baselines. An opt-in Pi runner sends the balanced 21-prompt pack to a local or
+configured model with tools, project context, skills, extensions, and sessions
+disabled. Model accuracy is reported separately from deterministic fact
+retention and is never a network or credential requirement for CI.
+
+The synthetic suite verifies the representation contract, not real-app parser
+recall. Real-capture evaluation remains gated on retaining parser-requested
+structural containers in the platform walk; otherwise most current stored
+trees cannot express sender/message, task/status, or event/schedule
+relationships.
+
 ## 11. Rollout
 
 1. Retain parser-requested structural containers in the existing platform walk
