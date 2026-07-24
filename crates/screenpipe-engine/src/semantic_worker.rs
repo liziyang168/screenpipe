@@ -155,6 +155,9 @@ async fn process_semantic_job(
         .map(|node| captured_node(node, job.redact_pii))
         .collect::<Vec<_>>();
     let adapted = adapt_captured_accessibility_tree(&nodes, TreeBudget::default())?;
+    // The compact tree owns its interned strings. Release transient adapter
+    // copies before parsing and database work.
+    drop(nodes);
     if adapted.tree.is_empty() {
         return Ok(());
     }
