@@ -124,6 +124,31 @@ editor fixtures cover all three platforms. They are contract fixtures, not proof
 that current platform walkers retain every required structural node. Capture
 integration remains a separate measured milestone.
 
+### Real-capture replay checkpoint
+
+`CapturedAccessibilityNode` and `adapt_captured_accessibility_tree` can now
+replay Screenpipe's existing `accessibility_tree_json` through the compact
+arena without committing private capture data. The `replay` example reports
+only node and attribute counts, parser selection, output size, heap estimates,
+and timings. It never prints semantic content.
+
+A read-only replay over nine recent local target-app frames on 2026-07-24
+confirmed the intended fail-open behavior:
+
+- Obsidian and Terminal produced bounded document output.
+- ChatGPT, Claude, Mail, Notion, Notes, Messages, and WhatsApp returned
+  `NotHandled` rather than guessing.
+- The largest sampled tree had 584 retained nodes. Debug-build adaptation was
+  under 2 ms and parsing was under 1.4 ms for every sample.
+- Most sampled macOS trees had no class names and many depth gaps because the
+  current stored tree keeps text-emitting nodes, not every structural
+  container.
+
+This is evidence that runtime activation must retain parser-requested
+structural containers during the existing walk. Loosening family parsers around
+flat text would increase false relationships and is not an acceptable shortcut.
+Raw frames and extracted text remain local and are not test fixtures.
+
 ## 4. Capture integration
 
 The parser registry returns a `SemanticCapturePlan` before an accessibility walk.
@@ -139,6 +164,12 @@ walker already batches role, value, title, description, position, and size for
 each visited node. Retaining those fields should not add accessibility IPC.
 Optional DOM classes and identifiers should be added to the same batch only when
 the selected plan requests them.
+
+`TreeSnapshot` now carries a native bundle identifier or executable alongside
+the display name so parser selection does not depend on localized app names.
+The current text-oriented node list can be adapted for offline replay, but it is
+not sufficient for conversation, mail, task, and calendar relationships until
+the requested structural containers are retained.
 
 The existing text-oriented `TreeSnapshot.nodes` and database element behavior
 stay unchanged until the semantic path is proven.
@@ -246,10 +277,13 @@ compression alone is not a sufficient metric.
 
 ## 11. Rollout
 
-1. Replay every family fixture against real compact structural capture.
-2. Add nonblocking worker, schema, retention, and redaction integration.
-3. Add semantic search and MCP output behind a feature flag.
-4. Measure token reduction and parser resource use on representative traces.
-5. Tighten profiles only from privacy-safe real-tree fixtures when a shared
+1. Retain parser-requested structural containers in the existing platform walk
+   and replay every family against privacy-safe real-tree fixtures.
+2. Add the nonblocking shadow worker with metrics only and no database writes.
+3. Add schema, retention, and redaction integration after shadow resource gates
+   pass.
+4. Add semantic search and MCP output behind a feature flag.
+5. Measure token reduction and parser resource use on representative traces.
+6. Tighten profiles only from privacy-safe real-tree fixtures when a shared
    parser abstains or emits the wrong structure.
-6. Consider signed remote parser packs only after shipped parsers are stable.
+7. Consider signed remote parser packs only after shipped parsers are stable.

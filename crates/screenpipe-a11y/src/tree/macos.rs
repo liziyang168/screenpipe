@@ -643,7 +643,7 @@ impl MacosTreeWalker {
         // 1. Get the focused application via the AX system-wide element.
         // This stays within the accessibility stack instead of relying on
         // NSWorkspace's foreground-app state from a background thread.
-        let (focused_app, pid, app_name) = match resolve_focused_ax_app() {
+        let (focused_app, pid, app_name, app_id) = match resolve_focused_ax_app() {
             Some(focused) => focused,
             None => return Ok(TreeWalkResult::NotFound),
         };
@@ -888,6 +888,8 @@ impl MacosTreeWalker {
 
         Ok(TreeWalkResult::Found(TreeSnapshot {
             app_name,
+            app_id,
+            executable: None,
             window_name,
             text_content,
             nodes: state.nodes,
@@ -1985,7 +1987,7 @@ fn frontmost_pid_via_window_server() -> Option<i32> {
     None
 }
 
-fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String)> {
+fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String, Option<String>)> {
     // The AX system-wide focusedApplication is not just *empty* for
     // Chromium/Electron apps that haven't materialized their AX tree — it
     // can go STALE, still reporting the previously focused app. A walker
@@ -1995,7 +1997,7 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String)> {
     // kept resolving the terminal indefinitely. Cross-check against the
     // window server (fresh in any process); NSWorkspace's isActive scan
     // remains as a secondary source for run-loop processes.
-    let ws_active = cidre::objc::ar_pool(|| -> Option<(i32, String)> {
+    let ws_active = cidre::objc::ar_pool(|| -> Option<(i32, String, Option<String>)> {
         let workspace = ns::Workspace::shared();
         for app in workspace.running_apps().iter() {
             if !app.is_active() {
@@ -2006,12 +2008,13 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String)> {
                 .localized_name()
                 .map(|s| s.to_string())
                 .unwrap_or_default();
-            return Some((pid, app_name));
+            let app_id = app.bundle_id().map(|s| s.to_string());
+            return Some((pid, app_name, app_id));
         }
         None
     });
     let front_pid =
-        frontmost_pid_via_window_server().or_else(|| ws_active.as_ref().map(|(pid, _)| *pid));
+        frontmost_pid_via_window_server().or_else(|| ws_active.as_ref().map(|(pid, _, _)| *pid));
 
     let sys = ax::UiElement::sys_wide();
     if let Ok(focused_app) = sys.focused_app() {
@@ -2027,8 +2030,8 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String)> {
                     );
                 }
                 _ => {
-                    let app_name = localized_app_name_for_pid(pid);
-                    return Some((focused_app, pid, app_name));
+                    let (app_name, app_id) = localized_app_metadata_for_pid(pid);
+                    return Some((focused_app, pid, app_name, app_id));
                 }
             }
         }
@@ -2039,24 +2042,38 @@ fn resolve_focused_ax_app() -> Option<(Retained<ax::UiElement>, i32, String)> {
     // from the frontmost pid so Obsidian/Discord/Claude can still be walked
     // instead of falling straight to OCR.
     if let Some(pid) = front_pid {
+        let fallback_metadata = localized_app_metadata_for_pid(pid);
         let app_name = match &ws_active {
-            Some((ws_pid, ws_name)) if *ws_pid == pid => ws_name.clone(),
-            _ => localized_app_name_for_pid(pid),
+            Some((ws_pid, ws_name, _)) if *ws_pid == pid => ws_name.clone(),
+            _ => fallback_metadata.0,
+        };
+        let app_id = match &ws_active {
+            Some((ws_pid, _, ws_app_id)) if *ws_pid == pid => ws_app_id.clone(),
+            _ => fallback_metadata.1,
         };
         let ax_app = ax::UiElement::with_app_pid(pid);
         debug!("focused AX app via frontmost pid={} app={}", pid, app_name);
-        return Some((ax_app, pid, app_name));
+        return Some((ax_app, pid, app_name, app_id));
     }
 
     None
 }
 
 fn localized_app_name_for_pid(pid: i32) -> String {
+    localized_app_metadata_for_pid(pid).0
+}
+
+fn localized_app_metadata_for_pid(pid: i32) -> (String, Option<String>) {
     cidre::objc::ar_pool(|| {
-        ns::RunningApp::with_pid(pid)
-            .and_then(|app| app.localized_name())
-            .map(|s| s.to_string())
-            .unwrap_or_default()
+        let Some(app) = ns::RunningApp::with_pid(pid) else {
+            return (String::new(), None);
+        };
+        (
+            app.localized_name()
+                .map(|s| s.to_string())
+                .unwrap_or_default(),
+            app.bundle_id().map(|s| s.to_string()),
+        )
     })
 }
 

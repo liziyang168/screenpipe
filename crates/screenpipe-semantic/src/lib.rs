@@ -8,12 +8,17 @@
 //! It defines the bounded, testable contract that those layers can use without
 //! allowing parser work to enter the capture critical path.
 
+mod capture;
 mod model;
 pub mod parsers;
 mod registry;
 mod tree;
 mod validation;
 
+pub use capture::{
+    adapt_captured_accessibility_tree, AdaptedSemanticTree, CaptureAdapterStats,
+    CapturedAccessibilityNode, CapturedNodeFlags,
+};
 pub use model::{
     AccessibilityAttribute, AppIdentity, AppVersionRequirement, AttributeSet, IdentityQuality,
     OffscreenPolicy, ParseContext, ParseOutcome, ParserManifest, ParserScope, Platform,

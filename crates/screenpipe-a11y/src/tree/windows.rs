@@ -392,6 +392,8 @@ impl TreeWalkerPlatform for WindowsTreeWalker {
         };
 
         Ok(TreeWalkResult::Found(TreeSnapshot {
+            executable: Some(app_name.clone()),
+            app_id: None,
             app_name,
             window_name,
             text_content: text_buffer,

@@ -1042,7 +1042,7 @@ impl TreeWalkerPlatform for LinuxTreeWalker {
         let conn = unsafe { self.ensure_init()? };
 
         // Find the focused window
-        let (app_name, window_title, window_ref, _pid) = match find_focused_window(conn) {
+        let (app_name, window_title, window_ref, pid) = match find_focused_window(conn) {
             Some(result) => result,
             None => return Ok(TreeWalkResult::NotFound),
         };
@@ -1137,8 +1137,14 @@ impl TreeWalkerPlatform for LinuxTreeWalker {
         // file, or read error — never panics. AT-SPI's Document
         // interface is too uneven across toolkits to rely on.
         let document_path = super::electron_docs::resolve_electron_doc_path(&app_lower);
+        let executable = (pid > 0)
+            .then(|| crate::platform::linux::get_process_name(pid))
+            .flatten()
+            .or_else(|| Some(app_name.clone()));
         Ok(TreeWalkResult::Found(TreeSnapshot {
             app_name,
+            app_id: None,
+            executable,
             window_name: window_title,
             text_content,
             nodes: state.nodes,

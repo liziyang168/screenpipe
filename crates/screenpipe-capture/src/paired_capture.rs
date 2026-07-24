@@ -1123,6 +1123,8 @@ mod tests {
 
         let snap = TreeSnapshot {
             app_name: "Safari".to_string(),
+            app_id: Some("com.apple.Safari".into()),
+            executable: None,
             window_name: "Example Page".to_string(),
             text_content: "Hello World - Example Page".to_string(),
             nodes: vec![AccessibilityTreeNode {
@@ -1191,6 +1193,8 @@ mod tests {
         // Empty accessibility text should be treated as no text
         let snap = TreeSnapshot {
             app_name: "TestApp".to_string(),
+            app_id: None,
+            executable: None,
             window_name: String::new(),
             text_content: String::new(),
             nodes: vec![],
@@ -1305,6 +1309,8 @@ mod tests {
             .join("\n");
         TreeSnapshot {
             app_name: "Test".to_string(),
+            app_id: None,
+            executable: None,
             window_name: "Test Window".to_string(),
             text_content: text,
             nodes,

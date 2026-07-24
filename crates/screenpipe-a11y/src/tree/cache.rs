@@ -98,6 +98,8 @@ mod tests {
     fn make_snapshot(app: &str, window: &str, text: &str) -> TreeSnapshot {
         TreeSnapshot {
             app_name: app.to_string(),
+            app_id: None,
+            executable: None,
             window_name: window.to_string(),
             text_content: text.to_string(),
             nodes: vec![],

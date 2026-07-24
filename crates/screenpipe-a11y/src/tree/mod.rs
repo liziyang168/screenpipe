@@ -332,6 +332,12 @@ pub struct WindowBounds {
 #[derive(Debug, Clone)]
 pub struct TreeSnapshot {
     pub app_name: String,
+    /// Stable native application identifier when the platform exposes one.
+    /// macOS stores the bundle identifier; Windows and Linux normally use
+    /// `executable` instead.
+    pub app_id: Option<String>,
+    /// Native process executable basename when available.
+    pub executable: Option<String>,
     pub window_name: String,
     pub text_content: String,
     /// Structured nodes preserving role and hierarchy from the accessibility tree.
@@ -670,6 +676,8 @@ mod tests {
     fn snapshot_with_url(url: Option<&str>) -> TreeSnapshot {
         TreeSnapshot {
             app_name: "Safari".into(),
+            app_id: Some("com.apple.Safari".into()),
+            executable: None,
             window_name: "Test".into(),
             text_content: "hello".into(),
             nodes: Vec::new(),

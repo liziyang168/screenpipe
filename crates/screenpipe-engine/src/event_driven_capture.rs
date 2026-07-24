@@ -3180,6 +3180,8 @@ mod tests {
     fn resolve_capture_metadata_uses_lightweight_metadata_when_tree_values_are_blank() {
         let snapshot = screenpipe_a11y::tree::TreeSnapshot {
             app_name: "  ".into(),
+            app_id: None,
+            executable: None,
             window_name: "".into(),
             text_content: "visible text".into(),
             nodes: Vec::new(),
@@ -3211,6 +3213,8 @@ mod tests {
     fn resolve_capture_metadata_prefers_lightweight_metadata_over_stale_tree_values() {
         let snapshot = screenpipe_a11y::tree::TreeSnapshot {
             app_name: "electron".into(),
+            app_id: None,
+            executable: Some("electron".into()),
             window_name: "stale browser title".into(),
             text_content: "visible text".into(),
             nodes: Vec::new(),
@@ -3246,6 +3250,8 @@ mod tests {
     fn resolve_capture_metadata_keeps_tree_values_when_lightweight_is_fallback_only() {
         let snapshot = screenpipe_a11y::tree::TreeSnapshot {
             app_name: "Safari".into(),
+            app_id: Some("com.apple.Safari".into()),
+            executable: None,
             window_name: "Current Page".into(),
             text_content: "visible text".into(),
             nodes: Vec::new(),
@@ -3281,6 +3287,8 @@ mod tests {
     fn resolve_capture_metadata_normalizes_blank_tree_values_without_lightweight_metadata() {
         let snapshot = screenpipe_a11y::tree::TreeSnapshot {
             app_name: "  ".into(),
+            app_id: None,
+            executable: None,
             window_name: "".into(),
             text_content: "visible text".into(),
             nodes: Vec::new(),
