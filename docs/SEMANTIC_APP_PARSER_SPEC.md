@@ -89,6 +89,22 @@ normal case is one family parser, or one app override plus one family parser.
 This bounds failure-path CPU even if the registry eventually contains hundreds
 of app definitions.
 
+### Reference family parser
+
+`EditorFamilyParser` proves the model with one implementation and three data-only
+profiles: VS Code, Cursor, and Windsurf. It recognizes macOS AX, Windows UIA,
+and Linux AT-SPI role aliases, then emits only editor buffers and integrated
+terminal content as `Document` items. Workbench navigation, status text, and
+other chrome are excluded from the projection.
+
+The parser abstains on unrecognized surfaces such as Settings and on editor
+buffers that report accessibility is unavailable. This preserves generic
+accessibility instead of emitting an empty or misleading semantic result.
+
+Synthetic, privacy-safe fixtures cover all three platforms and apps. They are
+contract fixtures, not proof that current platform walkers retain every required
+structural node. Capture integration remains a separate measured milestone.
+
 ## 4. Capture integration
 
 The parser registry returns a `SemanticCapturePlan` before an accessibility walk.
@@ -211,9 +227,9 @@ compression alone is not a sufficient metric.
 
 ## 11. Rollout
 
-1. Benchmark compact structural capture and one Rust parser.
+1. Replay the editor-family fixtures against real compact structural capture.
 2. Add nonblocking worker, schema, retention, and redaction integration.
-3. Add Slack/Teams, Gmail/Outlook, and VS Code/Cursor parser fixtures.
+3. Add conversation and mail family parsers with app profiles and fixtures.
 4. Add semantic search and MCP output behind a feature flag.
 5. Expand shared parser families with thin declarative app profiles.
 6. Consider signed remote parser packs only after shipped parsers are stable.

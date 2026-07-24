@@ -9,6 +9,7 @@
 //! allowing parser work to enter the capture critical path.
 
 mod model;
+pub mod parsers;
 mod registry;
 mod tree;
 mod validation;

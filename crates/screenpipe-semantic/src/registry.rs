@@ -57,10 +57,10 @@ impl RegisteredParser {
                 .iter()
                 .any(|expected| expected.eq_ignore_ascii_case(candidate))
         }) || app.executable.as_deref().is_some_and(|candidate| {
-            manifest
-                .executables
-                .iter()
-                .any(|expected| expected.eq_ignore_ascii_case(candidate))
+            let basename = candidate.rsplit(['/', '\\']).next().unwrap_or(candidate);
+            manifest.executables.iter().any(|expected| {
+                expected.eq_ignore_ascii_case(candidate) || expected.eq_ignore_ascii_case(basename)
+            })
         });
         let url_match = app.browser_url.as_deref().is_some_and(|url| {
             self.url_patterns
