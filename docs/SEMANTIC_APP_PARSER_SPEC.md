@@ -28,12 +28,24 @@ Use the strongest available source and retain the weaker sources as evidence:
 A parser may return `NotHandled`. Generic accessibility retrieval remains the
 fallback, so an app redesign degrades quality instead of losing context.
 
+For a matched app, parser order is:
+
+1. an app or version-specific override, only when needed
+2. a shared UI-family parser with declarative app profiles
+3. the existing generic accessibility projection outside this crate
+
+`NotHandled` or a parser failure advances to the next candidate. `Empty` stops
+the chain because it means the parser recognized a genuinely empty screen.
+
 ## 3. Foundation in this change
 
 `screenpipe-semantic` adds no runtime integration. It defines:
 
 - stable cross-platform `AppIdentity`
 - parser manifests and precompiled app/URL selection
+- ordered app-override and shared-family parser candidates
+- merged capture requirements across fallback candidates
+- fail-open parser execution with failure details for telemetry
 - parser-declared accessibility attribute and offscreen requirements
 - a compact immutable tree with integer links and interned strings
 - a deterministic Rust parser trait
@@ -44,12 +56,47 @@ fallback, so an app redesign degrades quality instead of losing context.
 Keeping this inactive makes the first review about contracts and resource bounds.
 Capture, database, scripting, and retrieval integrations can land independently.
 
+## 3.1 Parser coverage model
+
+Screenpipe does not need a custom semantic parser for every installed app.
+Every app keeps the current generic accessibility and OCR path. A parser is an
+optional quality upgrade for screens where sender, thread, document, task, or
+event relationships matter.
+
+Prefer shared family implementations with small declarative profiles:
+
+| Family | Shared extraction | Profile-specific details |
+|---|---|---|
+| Conversation | channel, sender, message, time, draft | message-list anchor, chrome exclusions, sender marker |
+| Mail | subject, participants, body, thread order, draft | thread root, collapsed-message rules, compose labels |
+| Editor | file, buffer, terminal, project | workbench marker, editor and terminal containers |
+| Task | title, project, status, due date, assignee | board/list anchors and field labels |
+| Calendar | event, time range, attendees, location | day/week view structure and event container |
+| Page/document | title, author, body, selection | article/editor root and navigation exclusions |
+
+A family parser manifest can match multiple bundle identifiers, executables,
+and URL patterns. Native and web versions may still need separate adapters when
+their accessibility trees differ, but they should share extraction and output
+code. App-only logic should be limited to selectors, stable labels, and known
+quirks rather than duplicating the whole parser.
+
+The family parser selects its profile from `ParseContext.app`, so a profile does
+not require another runtime or another tree copy. Register an `App` parser only
+when an app needs an algorithmic override that cannot fit the shared family.
+
+Only matching candidates run. The registry caps a tree at four candidates; the
+normal case is one family parser, or one app override plus one family parser.
+This bounds failure-path CPU even if the registry eventually contains hundreds
+of app definitions.
+
 ## 4. Capture integration
 
 The parser registry returns a `SemanticCapturePlan` before an accessibility walk.
-The plan combines the selected parser's `AttributeSet` and `OffscreenPolicy`
-with engine-owned `TreeBudget` and `OutputBudget` hard caps. Parser packs may
-request less data, but they cannot raise the engine's resource ceilings.
+The plan combines every matching fallback candidate's `AttributeSet` and
+`OffscreenPolicy` with engine-owned `TreeBudget` and `OutputBudget` hard caps.
+This prevents an app override from abstaining after capture omitted an attribute
+needed by its family fallback. Parser packs may request less data, but they
+cannot raise the engine's resource ceilings.
 
 Platform walkers should append every retained structural node to
 `SemanticTreeBuilder` while they perform the existing walk. On macOS the current
@@ -168,5 +215,5 @@ compression alone is not a sufficient metric.
 2. Add nonblocking worker, schema, retention, and redaction integration.
 3. Add Slack/Teams, Gmail/Outlook, and VS Code/Cursor parser fixtures.
 4. Add semantic search and MCP output behind a feature flag.
-5. Expand shared parser families.
+5. Expand shared parser families with thin declarative app profiles.
 6. Consider signed remote parser packs only after shipped parsers are stable.
