@@ -4,20 +4,26 @@
 
 mod catalog;
 mod chatgpt;
+mod claude;
 mod editor;
 mod families;
 mod native_macos;
+mod obsidian;
 
 pub use catalog::{builtin_app_profiles, AppFamily, BuiltinAppProfile};
 pub use chatgpt::ChatGptParser;
+pub use claude::ClaudeParser;
 pub use editor::EditorFamilyParser;
 pub use families::FamilyParser;
+pub use obsidian::ObsidianParser;
 
 use crate::{ParserRegistry, RegistryError};
 use native_macos::native_macos_parsers;
 
 pub fn register_builtin_parsers(registry: &mut ParserRegistry) -> Result<(), RegistryError> {
     registry.register(Box::new(ChatGptParser::new()))?;
+    registry.register(Box::new(ClaudeParser::new()))?;
+    registry.register(Box::new(ObsidianParser::new()))?;
     for parser in native_macos_parsers() {
         registry.register(Box::new(parser))?;
     }

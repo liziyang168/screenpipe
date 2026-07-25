@@ -1,6 +1,6 @@
 # Semantic context evaluation
 
-This fixed suite compares three representations of the same eight synthetic,
+This fixed suite compares three representations of the same ten synthetic,
 privacy-safe accessibility trees:
 
 - persisted accessibility JSON;
@@ -11,8 +11,8 @@ The report uses the exact `o200k_base` tokenizer. It scores both context-only
 tokens and the complete fixed Pi input prompt, retained task facts, tokens per
 retained fact, parser selection, compact-tree heap, and a 1,000-iteration local
 adapt/parse/render benchmark for each case. Seven cases cover the shared parser
-families and one covers the source-backed ChatGPT app override; catalog tests
-separately keep all 47 supported target profiles matched.
+families and three cover exact ChatGPT, Claude, and Obsidian app overrides;
+catalog tests separately keep all 47 supported target profiles matched.
 
 Run the deterministic report:
 
@@ -48,7 +48,7 @@ Use the fixed fixtures or a separately reviewed sanitized capture pack for
 fidelity gates. A model comparison over parser-generated labels would measure
 answerability, not correctness, and must not be reported as an accuracy score.
 
-Generate a balanced 24-row JSONL prompt pack for a Pi or other model A/B run:
+Generate a balanced 30-row JSONL prompt pack for a Pi or other model A/B run:
 
 ```bash
 cargo run -p screenpipe-semantic --example context_eval --locked -- --prompts \
@@ -60,7 +60,7 @@ Each case has identical question and expected answer across `raw_json`,
 from deterministic fact retention. A model run is intentionally opt-in so CI
 never requires credentials, network access, or paid inference.
 
-Run the complete 24-prompt A/B through a local Pi model:
+Run the complete 30-prompt A/B through a local Pi model:
 
 ```bash
 cargo run --release -p screenpipe-semantic --example context_eval --locked -- \

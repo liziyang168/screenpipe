@@ -210,6 +210,7 @@ jq -c --arg platform "$platform" '
   def macos_app_id($app):
     {
       "Calendar": "com.apple.iCal",
+      "Claude": "com.anthropic.claudefordesktop",
       "Discord": "com.hnc.Discord",
       "Gemini": "com.google.GeminiMacOS",
       "Mail": "com.apple.mail",
@@ -217,6 +218,7 @@ jq -c --arg platform "$platform" '
       "Microsoft To Do": "com.microsoft.to-do-mac",
       "Microsoft Word": "com.microsoft.Word",
       "Notes": "com.apple.Notes",
+      "Obsidian": "md.obsidian",
       "OmniFocus": "com.omnigroup.OmniFocus4",
       "Pages": "com.apple.iWork.Pages",
       "Slack": "com.tinyspeck.slackmacgap",
@@ -258,6 +260,11 @@ jq -s \
   --argjson max_apps "$max_apps" '
   def percent($part; $whole):
     if $whole == 0 then 0 else (($part * 10000 / $whole) | round) / 100 end;
+  def percentile($values; $fraction):
+    ($values | sort) as $sorted
+    | if ($sorted | length) == 0 then 0
+      else $sorted[(((($sorted | length) - 1) * $fraction) | floor)]
+      end;
   . as $rows
   | ($rows | map(select(.outcome == "handled"))) as $handled
   | ($handled | map(.raw_json_tokens) | add // 0) as $raw_tokens
@@ -294,10 +301,14 @@ jq -s \
           (if ($rows | length) == 0 then 0
            else (($rows | map(.build_micros) | add) / ($rows | length))
            end),
+        p50_build_micros: percentile(($rows | map(.build_micros)); 0.50),
+        p95_build_micros: percentile(($rows | map(.build_micros)); 0.95),
         mean_parse_micros:
           (if ($rows | length) == 0 then 0
            else (($rows | map(.parse_micros) | add) / ($rows | length))
            end),
+        p50_parse_micros: percentile(($rows | map(.parse_micros)); 0.50),
+        p95_parse_micros: percentile(($rows | map(.parse_micros)); 0.95),
         max_tree_heap_bytes: ($rows | map(.tree_heap_bytes) | max // 0),
         parser_failures: ($rows | map(.failures) | add // 0)
       },
@@ -330,6 +341,8 @@ jq -s \
                    else (((1 - ($app_semantic / $app_raw)) * 10000) | round) / 100
                    end),
                 mean_parse_micros: (($app_rows | map(.parse_micros) | add) / ($app_rows | length)),
+                p50_parse_micros: percentile(($app_rows | map(.parse_micros)); 0.50),
+                p95_parse_micros: percentile(($app_rows | map(.parse_micros)); 0.95),
                 max_tree_heap_bytes: ($app_rows | map(.tree_heap_bytes) | max // 0)
               }
           )

@@ -93,7 +93,7 @@ fn catalog_exactly_matches_all_47_targets() {
 #[test]
 fn every_profile_has_identity_family_and_bounded_registry_coverage() {
     let registry = builtin_parser_registry().expect("built-in manifests must compile");
-    assert_eq!(registry.len(), 21);
+    assert_eq!(registry.len(), 23);
     for profile in builtin_app_profiles() {
         assert!(!profile.families.is_empty(), "{} has no family", profile.id);
         let unique_families: HashSet<_> = profile.families.iter().copied().collect();
@@ -120,6 +120,8 @@ fn every_profile_has_identity_family_and_bounded_registry_coverage() {
                 | "chatgpt"
                 | "chatgptlegacy"
                 | "chatgptweb"
+                | "claude"
+                | "claudemacapp"
                 | "discord"
                 | "gemini_desktop"
                 | "mail"
@@ -127,6 +129,7 @@ fn every_profile_has_identity_family_and_bounded_registry_coverage() {
                 | "microsofttodo"
                 | "microsoftword"
                 | "notes"
+                | "obsidian"
                 | "omnifocus"
                 | "pages"
                 | "slack"

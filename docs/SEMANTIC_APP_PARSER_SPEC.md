@@ -121,11 +121,12 @@ calendar, and terminal implementations. Each implementation requires structural
 markers before it emits output. App identity by itself always returns
 `NotHandled`.
 
-The current registry has 21 implementations: seven shared family parsers, the
-ChatGPT override, and 13 native macOS overrides for Calendar, Discord, Gemini,
-Mail, Messages, Microsoft To Do, Microsoft Word, Notes, OmniFocus, Pages, Slack,
-TextEdit, and WhatsApp. The overrides use exact AX roles, subroles, or stable
-identifiers and safely abstain when their recognition contract is absent.
+The current registry has 23 implementations: seven shared family parsers,
+exact ChatGPT, Claude, and Obsidian overrides, and 13 native macOS overrides for
+Calendar, Discord, Gemini, Mail, Messages, Microsoft To Do, Microsoft Word,
+Notes, OmniFocus, Pages, Slack, TextEdit, and WhatsApp. The overrides use exact
+AX roles, subroles, stable identifiers, or bounded DOM-class contracts and
+safely abstain when their recognition contract is absent.
 
 The parsers abstain on unrecognized surfaces and inaccessible editor buffers.
 This preserves generic accessibility instead of emitting an empty or misleading
@@ -141,23 +142,29 @@ arena without committing private capture data. The `replay` example reports
 only node and attribute counts, parser selection, output size, heap estimates,
 and timings. It never prints semantic content.
 
-A read-only 90-day replay over 1,645 time-distributed local frames across 36
+A read-only 90-day replay over 1,649 time-distributed local frames across 36
 apps on 2026-07-24 confirmed the intended fail-open behavior:
 
-- 424 frames matched a parser identity and 201 were handled, or 47.41% of
+- 428 frames matched a parser identity and 202 were handled, or 47.20% of
   identity matches.
-- Handled frames used 95.24% fewer context tokens than their raw tree JSON.
-- Compact-tree construction averaged 19.37 microseconds per frame and the
-  parser chain averaged 4.41 microseconds per frame.
+- Handled frames used 95.39% fewer context tokens than their raw tree JSON.
+- Compact-tree construction measured 18 microseconds p50 and 286 microseconds
+  p95 per frame. The parser chain measured 1 microsecond p50 and 78
+  microseconds p95.
 - Maximum compact-tree heap was 180,251 bytes and there were zero parser
   failures.
+- The Obsidian override handled 98 of 100 historical Obsidian screens, reduced
+  their context by 93.46%, and measured 27 microseconds p50 and 64 microseconds
+  p95 parser time.
 - The Messages override handled 43 of 67 historical Messages screens using
   exact balloon/title identifiers and reduced their context by 94.30%.
 
 Historical frames still lack the parser-only structural containers and DOM
 identity added by this design, so they cannot measure the fresh-capture recall
-of the new Slack, WhatsApp, task, and document overrides. Raw frames and
-extracted text remain local and are not test fixtures.
+of the new Claude conversation, Slack, WhatsApp, task, and document overrides.
+Claude therefore safely fell through to its existing document-family parser on
+19 of 63 older frames. Raw frames and extracted text remain local and are not
+test fixtures.
 
 ## 4. Capture integration
 

@@ -60,6 +60,72 @@
     ]
   },
   {
+    "id": "claude_actor_turns",
+    "question": "What should the Claude parser use?",
+    "expected_answer": "exact DOM message boundaries",
+    "facts": [
+      "Claude parser evaluation",
+      "preserve actor relationships",
+      "exact DOM message boundaries"
+    ],
+    "app": {
+      "platform": "macos",
+      "app_id": "com.anthropic.claudefordesktop",
+      "executable": "Claude",
+      "display_name": "Claude",
+      "version": "0.12",
+      "browser_url": null
+    },
+    "nodes": [
+      { "role": "AXWindow", "text": "Claude parser evaluation", "depth": 0 },
+      { "role": "AXWebArea", "text": "", "depth": 1 },
+      { "role": "AXGroup", "text": "", "depth": 2, "class_name": "group relative inline-flex bg-bg-300 rounded-xl" },
+      { "role": "AXGroup", "text": "", "depth": 3, "class_name": "flex flex-row" },
+      { "role": "AXGroup", "text": "", "depth": 4, "class_name": "flex-1" },
+      { "role": "AXGroup", "text": "", "depth": 5, "class_name": "font-large !font-user-message py-0.5" },
+      { "role": "AXStaticText", "text": "preserve actor relationships", "depth": 6 },
+      { "role": "AXButton", "text": "Edit", "depth": 3 },
+      { "role": "AXGroup", "text": "", "depth": 2, "class_name": "group relative pb-[var(--msg-assistant-pb,0.75rem)]" },
+      { "role": "AXGroup", "text": "", "depth": 3, "class_name": "font-claude-response relative" },
+      { "role": "AXStaticText", "text": "Use exact DOM message boundaries.", "depth": 4 },
+      { "role": "AXButton", "text": "Copy", "depth": 3 }
+    ]
+  },
+  {
+    "id": "obsidian_active_note",
+    "question": "What should happen after the Obsidian parser ships?",
+    "expected_answer": "replay archived notes",
+    "accepted_answers": ["replay archived notes", "replay the archived notes"],
+    "facts": [
+      "Obsidian parser plan",
+      "extract the active note",
+      "replay archived notes"
+    ],
+    "app": {
+      "platform": "macos",
+      "app_id": "md.obsidian",
+      "executable": "Obsidian",
+      "display_name": "Obsidian",
+      "version": "1.9",
+      "browser_url": null
+    },
+    "nodes": [
+      { "role": "AXWindow", "text": "Obsidian parser plan - Obsidian", "depth": 0 },
+      { "role": "AXTextArea", "text": "parser", "depth": 1, "value": "parser", "class_name": "search-input" },
+      { "role": "AXGroup", "text": "", "depth": 1, "class_name": "workspace-leaf mod-active" },
+      { "role": "AXTextArea", "text": "Obsidian parser plan", "depth": 2, "value": "Obsidian parser plan", "class_name": "inline-title" },
+      { "role": "AXGroup", "text": "", "depth": 2, "class_name": "markdown-source-view cm-s-obsidian" },
+      { "role": "AXGroup", "text": "", "depth": 3, "class_name": "cm-editor" },
+      {
+        "role": "AXTextArea",
+        "text": "extract the active note\nreplay archived notes",
+        "depth": 4,
+        "value": "extract the active note\nreplay archived notes",
+        "class_name": "cm-content cm-lineWrapping"
+      }
+    ]
+  },
+  {
     "id": "gmail_thread",
     "question": "What action does Alice request?",
     "expected_answer": "retry signing",
@@ -138,7 +204,9 @@
     "expected_answer": "Jul 24, 10:00 AM to 10:30 AM",
     "accepted_answers": [
       "Jul 24, 10:00 AM to 10:30 AM",
-      "Jul 24, at 10:00 AM to 10:30 AM"
+      "Jul 24, at 10:00 AM to 10:30 AM",
+      "July 24, 10:00 AM to 10:30 AM",
+      "July 24, at 10:00 AM to 10:30 AM"
     ],
     "facts": ["Parser review", "Jul 24, 10:00 AM to 10:30 AM"],
     "app": {

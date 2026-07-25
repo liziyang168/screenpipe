@@ -5,82 +5,88 @@ Run date: 2026-07-24
 ## Deterministic representation suite
 
 Release-mode results across seven representative parser-family fixtures and
-one source-backed ChatGPT actor-turn fixture:
+three exact ChatGPT, Claude, and Obsidian fixtures:
 
-The registry now contains 21 parser implementations covering all 47 cataloged
+The registry now contains 23 parser implementations covering all 47 cataloged
 targets through shared families plus exact app overrides.
 
 | format | retained facts | context tokens | complete prompt tokens | tokens per retained fact |
 |---|---:|---:|---:|---:|
-| raw accessibility JSON | 24/24 | 1,007 | 1,328 | 41.96 |
-| current element outline | 20/24 | 721 | 1,042 | 36.05 |
-| semantic context | 24/24 | 243 | 564 | 10.13 |
+| raw accessibility JSON | 30/30 | 1,420 | 1,825 | 47.33 |
+| current element outline | 26/30 | 910 | 1,315 | 35.00 |
+| semantic context | 30/30 | 318 | 723 | 10.60 |
 
-Semantic context used 57.5% fewer complete input-prompt tokens than raw JSON
-and 45.9% fewer than the current outline. It retained task status, calendar
+Semantic context used 60.4% fewer complete input-prompt tokens than raw JSON
+and 45.0% fewer than the current outline. It retained task status, calendar
 schedule, and editor identity facts that the text-only outline dropped.
-Representative compact trees retained 507 to 1,315 heap bytes. A release-mode
-1,000-iteration adapt, parse, and render benchmark per case measured 1.69 to
-4.93 microseconds mean latency and 1.79 to 5.04 microseconds p95 latency. These
-tiny synthetic trees are regression signals, not the older-hardware acceptance
-benchmark.
+Representative compact trees retained 507 to 1,584 heap bytes. Every
+release-mode 1,000-iteration adapt, parse, and render benchmark stayed below 26
+microseconds mean and 23 microseconds p95 latency. The Claude case used 70.0%
+fewer complete prompt tokens than raw JSON, and the Obsidian case used 65.6%
+fewer. These tiny synthetic trees are regression signals, not the older-hardware
+acceptance benchmark.
 
 ## Local Pi model check
 
-One warmed, counterbalanced 24-prompt run used
+One warmed, counterbalanced 30-prompt run used
 `ollama/screenpipe-gemma4:latest` through Pi with tools, project context,
 skills, extensions, sessions, and startup network checks disabled:
 
 | format | correct answers |
 |---|---:|
-| raw accessibility JSON | 7/8 |
-| current element outline | 3/8 |
-| semantic context | 7/8 |
+| raw accessibility JSON | 9/10 |
+| current element outline | 5/10 |
+| semantic context | 10/10 |
 
 This model result is exploratory and not a CI gate. It is a single small local
 model run, and repeated runs showed that answers can vary. The
 deterministic token and fact-retention checks are the stable regression gate.
-The new ChatGPT case was answered correctly in all three formats.
+Claude was answered correctly in all three formats. Obsidian was correct from
+raw and semantic context, while the current outline hallucinated an unrelated
+output.
 
 ## Privacy-safe real-data replay
 
 A time-distributed 90-day replay sampled up to 100 valid trees from each of the
 50 highest-volume apps in the local Screenpipe database. Apps with fewer trees
-made the actual batch 1,645 frames across 36 apps. The replay fetched exact
+made the actual batch 1,649 frames across 36 apps. The replay fetched exact
 selected frame IDs into a mode-0600 temporary file, deleted that private tree
 export before report generation, and retained only structural metrics:
 
 | metric | result |
 |---|---:|
-| app-identity matched frames | 424/1,645 |
-| handled frames | 201/1,645 |
-| handled among identity matches | 47.41% |
-| raw tokens across handled frames | 2,843,140 |
-| semantic tokens across handled frames | 135,288 |
-| token reduction on handled frames | 95.24% |
-| mean compact-tree build | 19.37 us/frame |
-| mean parser chain | 4.41 us/frame |
+| app-identity matched frames | 428/1,649 |
+| handled frames | 202/1,649 |
+| handled among identity matches | 47.20% |
+| raw tokens across handled frames | 2,864,889 |
+| semantic tokens across handled frames | 132,214 |
+| token reduction on handled frames | 95.39% |
+| compact-tree build | 18 us p50, 286 us p95 |
+| parser chain | 1 us p50, 78 us p95 |
 | maximum compact-tree heap | 180,251 bytes |
 | parser failures | 0 |
 
-Handled app samples were ChatGPT 6/100, Claude 19/62, Messages 43/67,
-Notion 11/15, Obsidian 98/100, and Terminal 24/24. The Messages override used
-exact native balloon/title identifiers already present in historical text-node
-captures, handled 64.18% of its sampled screens, and reduced their context by
-94.30%. The 100-frame ChatGPT sample found explicit actor headings on six
+Handled app samples were ChatGPT 7/100, Claude 19/63, Messages 43/67,
+Notion 11/15, Obsidian 98/100, and Terminal 24/24. The Obsidian override handled
+the 98 historical notes directly, reduced their context by 93.46%, and measured
+27 us p50 and 64 us p95 parser time. The Messages override used exact native
+balloon/title identifiers already present in historical text-node captures,
+handled 64.18% of its sampled screens, and reduced their context by 94.30%.
+The 100-frame ChatGPT sample found explicit actor headings on seven
 frames. These rates measure screen-state coverage, not parser accuracy.
 
 Historical macOS captures contained essentially no DOM classes or structural
 container nodes. The opt-in walker now keeps a bounded parser-only structural
 sidecar in memory, including stable AX and DOM identifiers, while the persisted
-raw tree stays text-only. New Slack, WhatsApp, task, and document overrides need
-fresh captures with that structure, so this historical replay cannot measure
-their applicability yet. Notes still safely abstains because the current
-historical shape lacks its exact body marker. The replay has no human semantic
+raw tree stays text-only. New Claude conversation, Slack, WhatsApp, task, and
+document overrides need fresh captures with that structure, so this historical
+replay cannot measure their applicability yet. Claude safely fell through to
+its existing document-family parser on 19 of 63 older frames. Notes still
+safely abstains because the current historical shape lacks its exact body
+marker. The replay has no human semantic
 labels, so it measures safe applicability, context size, time, and memory, not
-extraction correctness. In particular, the large Claude document reductions
-require a reviewed fixture before they can be treated as useful conversation
-context.
+extraction correctness. The exact Claude actor-turn fixture separately gates
+message boundaries and sender labels.
 
 ## Storage boundary
 
